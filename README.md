@@ -220,6 +220,15 @@ curl -X POST \
 Deploy to Vercel as a standard Next.js app. Add the Cloudinary environment variables
 in Project Settings.
 
+## Replit
+
+This repo can be imported into Replit directly from GitHub.
+
+1. Import `EditorialOS/Pixel-Sky`.
+2. Set the environment variables from the table above in Replit Secrets.
+3. Run the project with `npm run dev`.
+4. If Replit prompts for a package install, use the committed `package-lock.json` so the dependency tree stays stable.
+
 ## Launch Readiness Checklist
 
 Use this checklist before selling publicly:
