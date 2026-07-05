@@ -1,0 +1,15 @@
+node_modules/
+.next/
+.turbo/
+.env.local
+.env
+.env.*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vercel
+tsconfig.tsbuildinfo
+injector-system-fixed.zip
+heros/
+injector-system/

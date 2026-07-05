@@ -1,0 +1,162 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-geist: 'Inter', system-ui, sans-serif;
+  --font-geist-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-geist);
+}
+
+body {
+  background: #efede8;
+  color: #1f1b16;
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #ebe7e0;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c9c2b8;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #b2aba1;
+}
+
+/* Gradient background */
+.gradient-bg {
+  background: radial-gradient(ellipse at top, #f7f5f0 0%, #efede8 60%);
+}
+
+/* Chat input glow */
+.chat-input-glow {
+  box-shadow: none;
+}
+
+.chat-input-glow:focus-within {
+  box-shadow: none;
+}
+
+/* Remove floating shadows for minimal UI */
+.shadow,
+.shadow-sm,
+.shadow-md,
+.shadow-lg,
+.shadow-xl,
+.shadow-2xl,
+.shadow-inner {
+  box-shadow: none !important;
+}
+
+/* Warm, minimal surfaces */
+.bg-white {
+  background-color: #f7f5f0 !important;
+}
+
+.bg-white\/80 {
+  background-color: rgba(247, 245, 240, 0.8) !important;
+}
+
+/* Message animations */
+.message-enter {
+  animation: messageEnter 0.4s ease-out;
+}
+
+@keyframes messageEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Typing indicator */
+.typing-dot {
+  animation: typingDot 1.4s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typingDot {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.3;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+/* Module pill */
+.module-pill {
+  @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
+  @apply transition-all duration-200;
+}
+
+.module-pill:hover {
+  @apply scale-105;
+}
+
+/* Action button */
+.action-btn {
+  @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium;
+  @apply bg-os-surface border border-os-border text-os-text;
+  @apply hover:bg-os-border hover:border-os-muted;
+  @apply transition-all duration-150;
+}
+
+/* Mono text */
+.mono {
+  font-family: var(--font-geist-mono);
+}
+
+/* Success/error states */
+.status-success {
+  @apply text-os-success;
+}
+
+.status-error {
+  @apply text-red-400;
+}
+
+/* Subtle grain */
+.grain::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
