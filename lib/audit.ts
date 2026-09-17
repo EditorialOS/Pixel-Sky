@@ -8,7 +8,13 @@ export type AuditAction =
   | 'settings_updated'
   | 'ai_search'
   | 'ai_index'
-  | 'variant_generated';
+  | 'variant_generated'
+  | 'asset_pack_created'
+  | 'asset_pack_approved'
+  | 'asset_pack_rejected'
+  | 'agent_key_created'
+  | 'agent_key_revoked'
+  | 'agent_mcp_search';
 
 export type AuditEvent = {
   orgId: string;

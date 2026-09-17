@@ -100,6 +100,31 @@ create index if not exists audit_logs_org_id_idx on audit_logs (org_id);
 create index if not exists audit_logs_created_at_idx on audit_logs (created_at desc);
 ```
 
+Create `asset_packs` for the agent-ready review workflow:
+
+```sql
+create table if not exists asset_packs (
+  id uuid primary key default gen_random_uuid(),
+  org_id text not null,
+  title text not null,
+  brief text not null,
+  channels jsonb not null default '[]'::jsonb,
+  notes text,
+  status text not null default 'draft' check (status in ('draft', 'approved', 'rejected')),
+  assets jsonb not null default '[]'::jsonb,
+  created_by text not null,
+  reviewed_by text,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists asset_packs_org_updated_at_idx
+  on asset_packs (org_id, updated_at desc);
+```
+
+The same migration is committed at `supabase/migrations/202609170001_asset_packs.sql`.
+
 Create a `waitlist_signups` table for marketing lead capture:
 
 ```sql
@@ -185,6 +210,47 @@ Visit `/audit` to view the latest events.
 4. The UI renders previews and download links
 5. Uploads go directly to Cloudinary using a signed upload signature (supports larger files).
 
+## Agent-Ready Asset Packs
+
+`/asset-packs` turns a brief into a reviewable draft. Search candidates, select the assets,
+and approve the resulting pack before an agent can use it. The durable manifest is available
+at `GET /api/asset-packs/:id` after approval.
+
+Current authenticated API primitives:
+
+- `POST /api/dam/search` searches Cloudinary with strict or semantic matching.
+- `POST /api/asset-packs` creates a draft from verified workspace asset IDs.
+- `GET /api/asset-packs/:id` returns the pack and `pixelsky.asset-pack/v1` JSON manifest.
+- `PATCH /api/asset-packs/:id` approves or rejects a draft.
+
+Each pack snapshots delivery URLs, metadata, selected variants, and review state. Cloudinary
+remains the media source of truth; PixelSky owns the agent-facing manifest and audit trail.
+
+## Remote MCP For Agents
+
+PixelSky exposes a remote MCP endpoint at:
+
+```text
+https://light-dam-v1.vercel.app/api/mcp
+```
+
+Run `supabase/migrations/202609170002_agent_api_keys.sql`, expose the `agent_api_keys`
+table through Supabase Data API, and keep RLS enabled. A workspace admin can then create a
+scoped bearer key at `/settings/agents`. The plaintext key is displayed once only; PixelSky
+stores a SHA-256 hash.
+
+The endpoint supports clients that allow a static `Authorization: Bearer psk_live_...` header.
+It currently provides these tools according to the key's scopes:
+
+- `search_assets` returns previews, source URLs, and direct Cloudinary attachment download URLs.
+- `create_asset_pack_draft` validates selected asset IDs against the workspace and creates a draft.
+- `list_approved_asset_packs` and `get_approved_asset_pack` return only approved manifests.
+- `approve_asset_pack` is available only with the explicit `asset_packs:approve` scope and is audit logged.
+
+Default keys can search, read approved packs, and create drafts. Add `asset_packs:approve` only
+to a deliberately trusted agent connection. The static-key MCP release works with compatible
+MCP clients; browser OAuth is still required for a one-click ChatGPT app installation.
+
 ## Metadata Conventions
 
 PixelSky reads metadata from either Cloudinary **context** or **structured metadata**.
@@ -234,7 +300,7 @@ This repo can be imported into Replit directly from GitHub.
 Use this checklist before selling publicly:
 
 1. Set production auth keys in Vercel (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`) and verify they are not Clerk dev/test keys.
-2. Run Supabase migrations for `organization_cloudinary`, `audit_logs`, `asset_embeddings`, `organization_billing`, and `waitlist_signups`.
+2. Run Supabase migrations for `organization_cloudinary`, `audit_logs`, `asset_packs`, `asset_embeddings`, `organization_billing`, `waitlist_signups`, and `agent_api_keys`; expose the required tables and `match_asset_embeddings` through Supabase Data API with RLS enabled.
 3. Configure Stripe live mode keys, create live prices, and register `/api/stripe/webhook`.
 4. Connect a Cloudinary account, upload test assets, and run **Build AI index** in `/settings/cloudinary`.
 5. Verify these flows end-to-end:
@@ -243,4 +309,6 @@ Use this checklist before selling publicly:
    - upload + download + variant generation
    - checkout + webhook status updates
    - `/audit` event visibility
+   - `/asset-packs` draft, approval, and JSON manifest flows
+   - `/settings/agents` key creation, revocation, MCP search, draft creation, explicit agent approval, and attachment download links
    - `/marketing` waitlist submissions

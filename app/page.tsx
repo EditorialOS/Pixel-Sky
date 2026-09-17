@@ -562,6 +562,18 @@ export default function LightDamPage() {
                   Activity log
                 </a>
                 <a
+                  href="/asset-packs"
+                  className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-os-text shadow-sm transition hover:bg-os-bg"
+                >
+                  Asset packs
+                </a>
+                <a
+                  href="/settings/agents"
+                  className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-os-text shadow-sm transition hover:bg-os-bg"
+                >
+                  Agent access
+                </a>
+                <a
                   href="/billing"
                   className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-os-text shadow-sm transition hover:bg-os-bg"
                 >

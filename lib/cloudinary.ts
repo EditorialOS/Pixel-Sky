@@ -76,7 +76,10 @@ export async function getAssetCount(settings: CloudinarySettings, maxResults: nu
   return Array.isArray(result.resources) ? result.resources.length : 0;
 }
 
-export async function getAssetsByIds(publicIds: string[]) {
+export async function getAssetsByIds(
+  publicIds: string[],
+  settings?: CloudinarySettings,
+) {
   if (publicIds.length === 0) return [];
   const result = await cloudinary.api.resources_by_ids(publicIds, {
     resource_type: 'image',
@@ -84,6 +87,13 @@ export async function getAssetsByIds(publicIds: string[]) {
     context: true,
     metadata: true,
     tags: true,
+    ...(settings
+      ? {
+        cloud_name: settings.cloudName,
+        api_key: settings.apiKey,
+        api_secret: settings.apiSecret,
+      }
+      : {}),
   });
   return result.resources ?? [];
 }
