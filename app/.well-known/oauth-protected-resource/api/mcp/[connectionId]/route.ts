@@ -24,9 +24,6 @@ export async function OPTIONS() {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const issuer = getMcpOAuthIssuer();
-  if (!issuer) return response({ error: 'PixelSky OAuth is not configured yet.' }, 404);
-
   const { connectionId } = await context.params;
   try {
     const connection = await getActiveAgentConnection(connectionId);
@@ -39,7 +36,7 @@ export async function GET(request: Request, context: RouteContext) {
   const resource = new URL(`/api/mcp/${connectionId}`, request.url).toString();
   return response({
     resource,
-    authorization_servers: [issuer],
+    authorization_servers: [getMcpOAuthIssuer(request)],
     resource_name: 'PixelSky',
     resource_documentation: new URL('/settings/agents', request.url).toString(),
   });

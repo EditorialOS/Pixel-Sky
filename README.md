@@ -229,7 +229,7 @@ remains the media source of truth; PixelSky owns the agent-facing manifest and a
 ## Chat App Connections (No Key)
 
 PixelSky can expose one revocable, OAuth-protected MCP endpoint per workspace. This is
-the path for non-technical users connecting ChatGPT or another remote MCP client:
+the path for non-technical users connecting ChatGPT:
 
 1. A workspace admin opens `/settings/agents`, creates a chat connection, and chooses its permissions.
 2. They paste the generated endpoint into the chat client's custom connector setting.
@@ -245,16 +245,10 @@ PixelSky permissions during sign-in.
 Run `supabase/migrations/202609170003_agent_mcp_connections.sql`, expose
 `agent_mcp_connections` through Supabase Data API, and keep RLS enabled.
 
-In Clerk's **OAuth applications** settings:
-
-1. Enable **Publish DCR support** for ChatGPT custom apps and other DCR-compatible clients.
-2. Set default scopes to `profile email offline_access` so a client that omits a scope still receives a renewable login. Clerk includes the OpenID scope in its OAuth flow.
-3. Require PKCE and keep the OAuth consent screen enabled.
-4. Set `PIXELSKY_OAUTH_ISSUER` in Vercel to the Clerk Frontend API origin, for example `https://your-instance.clerk.accounts.dev`.
-
-Dynamic Client Registration exposes an unauthenticated client-registration endpoint. Enable it
-only for the initial remote-connector rollout, monitor the clients Clerk records, and turn it
-off if PixelSky moves to a pre-registered client or Client ID Metadata Documents flow.
+PixelSky is its own OAuth authorization server for ChatGPT and uses the existing Clerk
+session only to identify the person approving access. It accepts ChatGPT's fixed callback
+URI and enforces S256 PKCE, so Clerk OAuth DCR and `PIXELSKY_OAUTH_ISSUER` are not
+required for this integration. Keep Clerk DCR disabled unless another integration needs it.
 
 ## Remote MCP For Technical Clients
 

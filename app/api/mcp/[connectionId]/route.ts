@@ -49,7 +49,7 @@ async function handleMcp(request: Request, context: RouteContext) {
   }
 
   try {
-    const principal = await authenticateMcpOAuthConnection(connection);
+    const principal = await authenticateMcpOAuthConnection(request, connection);
     if (!principal) return oauthUnauthorizedResponse(request, connectionId);
     return handleAuthenticatedMcp(request, principal);
   } catch (error) {

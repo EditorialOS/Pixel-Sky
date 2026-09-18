@@ -200,7 +200,7 @@ export function withMcpCors(response: Response) {
     'Access-Control-Allow-Headers',
     'Authorization, Content-Type, MCP-Protocol-Version, MCP-Session-Id, Last-Event-ID',
   );
-  headers.set('Access-Control-Expose-Headers', 'MCP-Protocol-Version, MCP-Session-Id');
+  headers.set('Access-Control-Expose-Headers', 'MCP-Protocol-Version, MCP-Session-Id, WWW-Authenticate');
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
