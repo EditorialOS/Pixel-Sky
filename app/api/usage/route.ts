@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { getAssetCount, getCloudinarySettingsForOrg } from '@/lib/cloudinary';
+import {
+  cloudinaryErrorMessage,
+  getAssetCount,
+  getCloudinarySettingsForOrg,
+  logCloudinaryError,
+} from '@/lib/cloudinary';
 import { getAssetLimit } from '@/lib/limits';
 
 export async function GET() {
@@ -26,7 +31,13 @@ export async function GET() {
     return NextResponse.json({ error: 'Cloudinary not connected.' }, { status: 400 });
   }
 
-  const used = await getAssetCount(settings, Math.min(limit + 1, 500));
+  let used;
+  try {
+    used = await getAssetCount(settings, Math.min(limit + 1, 500));
+  } catch (error) {
+    logCloudinaryError('Cloudinary usage check failed', error);
+    return NextResponse.json({ error: cloudinaryErrorMessage(error) }, { status: 400 });
+  }
   const remaining = Math.max(limit - used, 0);
 
   return NextResponse.json({ limit, used, remaining });

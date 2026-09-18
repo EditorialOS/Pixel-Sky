@@ -49,6 +49,42 @@ export function configureCloudinary(settings: CloudinarySettings) {
   });
 }
 
+export function cloudinaryErrorMessage(error: unknown) {
+  const candidate = error as { message?: unknown; error?: { message?: unknown } } | null;
+  const message = typeof candidate?.error?.message === 'string'
+    ? candidate.error.message
+    : typeof candidate?.message === 'string'
+      ? candidate.message
+      : '';
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes('cloud_name mismatch')) {
+    return 'Cloudinary rejected these credentials because the cloud name does not match the API key and secret. Copy all three values from the same Cloudinary product environment.';
+  }
+  if (normalized.includes('invalid api key') || normalized.includes('invalid signature')) {
+    return 'Cloudinary rejected the API key or API secret. Copy both values again from the same Cloudinary product environment.';
+  }
+  return 'Cloudinary could not verify this connection. Check the cloud name, API key, and API secret.';
+}
+
+export function logCloudinaryError(context: string, error: unknown) {
+  // Cloudinary error objects can contain request authentication details. Never log them verbatim.
+  console.error(`${context}: ${cloudinaryErrorMessage(error)}`);
+}
+
+export async function verifyCloudinarySettings(settings: CloudinarySettings) {
+  try {
+    await cloudinary.api.ping({
+      api_key: settings.apiKey,
+      api_secret: settings.apiSecret,
+      cloud_name: settings.cloudName,
+    });
+    return null;
+  } catch (error) {
+    return cloudinaryErrorMessage(error);
+  }
+}
+
 function escapeExpressionValue(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return '';

@@ -50,10 +50,10 @@ async function handleSearch(request: NextRequest) {
   try {
     return await runSearch(request);
   } catch (error) {
-    console.error('DAM search error:', error);
     if (error instanceof DamSearchError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
+    console.error('DAM search error: unexpected failure');
     return NextResponse.json({ error: 'Failed to search assets.' }, { status: 500 });
   }
 }

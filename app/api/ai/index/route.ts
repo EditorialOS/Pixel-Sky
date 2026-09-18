@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v2 as cloudinary } from 'cloudinary';
 import { auth } from '@clerk/nextjs/server';
-import { configureCloudinary, getCloudinarySettingsForOrg, getAssetsByIds, buildAssetExpression } from '@/lib/cloudinary';
+import {
+  buildAssetExpression,
+  cloudinaryErrorMessage,
+  configureCloudinary,
+  getAssetsByIds,
+  getCloudinarySettingsForOrg,
+  logCloudinaryError,
+} from '@/lib/cloudinary';
 import { buildEmbeddingText, createEmbeddings, upsertAssetEmbeddings } from '@/lib/embeddings';
 import { logAuditEvent } from '@/lib/audit';
 
@@ -40,25 +47,30 @@ export async function POST(request: NextRequest) {
   let resources: any[] = [];
   let nextCursor: string | null = null;
 
-  if (publicIds.length > 0) {
-    resources = await getAssetsByIds(publicIds);
-  } else {
-    const expression = buildAssetExpression(settings.folder);
-    const searchQuery = cloudinary.search
-      .expression(expression)
-      .sort_by('created_at', 'desc')
-      .with_field('context')
-      .with_field('metadata')
-      .with_field('tags')
-      .max_results(MAX_INDEX);
+  try {
+    if (publicIds.length > 0) {
+      resources = await getAssetsByIds(publicIds);
+    } else {
+      const expression = buildAssetExpression(settings.folder);
+      const searchQuery = cloudinary.search
+        .expression(expression)
+        .sort_by('created_at', 'desc')
+        .with_field('context')
+        .with_field('metadata')
+        .with_field('tags')
+        .max_results(MAX_INDEX);
 
-    if (payload.cursor) {
-      searchQuery.next_cursor(payload.cursor);
+      if (payload.cursor) {
+        searchQuery.next_cursor(payload.cursor);
+      }
+
+      const result = await searchQuery.execute();
+      resources = result.resources ?? [];
+      nextCursor = result.next_cursor ?? null;
     }
-
-    const result = await searchQuery.execute();
-    resources = result.resources ?? [];
-    nextCursor = result.next_cursor ?? null;
+  } catch (error) {
+    logCloudinaryError('Cloudinary AI indexing failed', error);
+    return NextResponse.json({ error: cloudinaryErrorMessage(error) }, { status: 400 });
   }
 
   if (resources.length === 0) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { logAuditEvent } from '@/lib/audit';
+import { verifyCloudinarySettings } from '@/lib/cloudinary';
 
 type CloudinarySettingsPayload = {
   cloudName?: string;
@@ -70,6 +71,11 @@ export async function POST(request: NextRequest) {
       { error: 'Cloud name, API key, and API secret are required.' },
       { status: 400 },
     );
+  }
+
+  const verificationError = await verifyCloudinarySettings({ cloudName, apiKey, apiSecret, folder });
+  if (verificationError) {
+    return NextResponse.json({ error: verificationError }, { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();

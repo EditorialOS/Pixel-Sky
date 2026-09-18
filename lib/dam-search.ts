@@ -1,5 +1,10 @@
 import { v2 as cloudinary } from 'cloudinary';
-import { getAssetsByIds, getCloudinarySettingsForOrg } from '@/lib/cloudinary';
+import {
+  cloudinaryErrorMessage,
+  getAssetsByIds,
+  getCloudinarySettingsForOrg,
+  logCloudinaryError,
+} from '@/lib/cloudinary';
 import { createEmbeddings } from '@/lib/embeddings';
 import { getSupabaseAdmin } from '@/lib/supabase';
 
@@ -324,11 +329,17 @@ export async function searchDamAssets(
     searchQuery.next_cursor(cursor);
   }
 
-  const result = await (searchQuery as any).execute({
-    cloud_name: settings.cloudName,
-    api_key: settings.apiKey,
-    api_secret: settings.apiSecret,
-  });
+  let result;
+  try {
+    result = await (searchQuery as any).execute({
+      cloud_name: settings.cloudName,
+      api_key: settings.apiKey,
+      api_secret: settings.apiSecret,
+    });
+  } catch (error) {
+    logCloudinaryError('Cloudinary asset search failed', error);
+    throw new DamSearchError(cloudinaryErrorMessage(error), 400);
+  }
   const parsedQuery = parseQuery(query);
   const resources = result.resources ?? [];
   let filtered: any[] = [];
