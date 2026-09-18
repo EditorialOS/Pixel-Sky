@@ -52,12 +52,15 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { userId, orgId } = await auth();
+  const { userId, orgId, orgRole } = await auth();
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
   if (!orgId) {
     return NextResponse.json({ error: 'Workspace required.' }, { status: 403 });
+  }
+  if (orgRole !== 'org:admin') {
+    return NextResponse.json({ error: 'Workspace admin access is required to change Cloudinary settings.' }, { status: 403 });
   }
 
   const payload = (await request.json()) as CloudinarySettingsPayload;

@@ -13,7 +13,8 @@ type CloudinarySettingsResponse = {
 };
 
 export default function CloudinarySettingsPage() {
-  const { organization } = useOrganization();
+  const { organization, membership } = useOrganization();
+  const canManage = membership?.role === 'org:admin';
   const [isLoading, setIsLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [maskedKey, setMaskedKey] = useState('');
@@ -163,10 +164,12 @@ export default function CloudinarySettingsPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 grid gap-4">
+            {!canManage && <p className="text-sm text-os-muted">Only workspace admins can change the Cloudinary connection or build the AI index.</p>}
             <div className="grid gap-4 md:grid-cols-2">
               <label className="grid gap-2 text-xs text-os-muted">
                 <span className="uppercase tracking-wide">Cloud name</span>
                 <input
+                  disabled={!canManage}
                   value={form.cloudName}
                   onChange={(event) => setForm((prev) => ({ ...prev, cloudName: event.target.value }))}
                   placeholder="your-cloud-name"
@@ -176,6 +179,7 @@ export default function CloudinarySettingsPage() {
               <label className="grid gap-2 text-xs text-os-muted">
                 <span className="uppercase tracking-wide">Folder (optional)</span>
                 <input
+                  disabled={!canManage}
                   value={form.folder}
                   onChange={(event) => setForm((prev) => ({ ...prev, folder: event.target.value }))}
                   placeholder="light-dam"
@@ -188,6 +192,7 @@ export default function CloudinarySettingsPage() {
               <label className="grid gap-2 text-xs text-os-muted">
                 <span className="uppercase tracking-wide">API key</span>
                 <input
+                  disabled={!canManage}
                   value={form.apiKey}
                   onChange={(event) => setForm((prev) => ({ ...prev, apiKey: event.target.value }))}
                   placeholder={maskedKey || 'Enter your API key'}
@@ -197,6 +202,7 @@ export default function CloudinarySettingsPage() {
               <label className="grid gap-2 text-xs text-os-muted">
                 <span className="uppercase tracking-wide">API secret</span>
                 <input
+                  disabled={!canManage}
                   type="password"
                   value={form.apiSecret}
                   onChange={(event) => setForm((prev) => ({ ...prev, apiSecret: event.target.value }))}
@@ -213,7 +219,7 @@ export default function CloudinarySettingsPage() {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="submit"
-                disabled={status === 'saving' || isLoading}
+                disabled={!canManage || status === 'saving' || isLoading}
                 className="h-11 rounded-xl bg-os-accent px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-black/20"
               >
                 {status === 'saving' ? 'Saving...' : 'Save connection'}
@@ -255,7 +261,7 @@ export default function CloudinarySettingsPage() {
             <button
               type="button"
               onClick={runIndex}
-              disabled={indexStatus === 'running'}
+              disabled={!canManage || indexStatus === 'running'}
               className="h-11 rounded-xl bg-os-accent px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-black/20"
             >
               {indexStatus === 'running' ? 'Indexing...' : 'Build AI index'}
