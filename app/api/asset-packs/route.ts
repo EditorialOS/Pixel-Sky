@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { configureCloudinary, getAssetsByIds, getCloudinarySettingsForOrg } from '@/lib/cloudinary';
+import { assetIsInWorkspaceFolder, getAssetsByIds, getCloudinarySettingsForOrg } from '@/lib/cloudinary';
 import {
   AssetPackCandidateInput,
   AssetPackRecord,
@@ -60,13 +60,6 @@ function cleanCandidates(value: unknown): AssetPackCandidateInput[] {
     });
   }
   return candidates.slice(0, MAX_ASSETS);
-}
-
-function assetIsInWorkspaceFolder(asset: { folder?: string | null; public_id: string }, folder?: string | null) {
-  const workspaceFolder = folder?.trim();
-  if (!workspaceFolder) return true;
-  const assetFolder = asset.folder || asset.public_id.split('/').slice(0, -1).join('/');
-  return assetFolder === workspaceFolder || assetFolder.startsWith(`${workspaceFolder}/`);
 }
 
 function databaseError(message: string) {
@@ -151,8 +144,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    configureCloudinary(settings);
-    const resources = await getAssetsByIds(candidates.map((candidate) => candidate.public_id));
+    const resources = await getAssetsByIds(candidates.map((candidate) => candidate.public_id), settings);
     const allowedResources = resources.filter((asset: any) => assetIsInWorkspaceFolder(asset, settings.folder));
     const byPublicId = new Map(allowedResources.map((asset: any) => [asset.public_id, asset]));
     const missing = candidates
@@ -165,7 +157,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const assets = candidates.map((candidate) => buildPackAsset(byPublicId.get(candidate.public_id), candidate));
+    const assets = candidates.map((candidate) => buildPackAsset(byPublicId.get(candidate.public_id), candidate, settings.cloudName));
     const supabase = getSupabaseAdmin();
     const { data, error } = await (supabase as any)
       .from('asset_packs')

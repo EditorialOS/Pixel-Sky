@@ -8,7 +8,15 @@ import {
   listApprovedAssetPacks,
 } from '@/lib/agent-asset-packs';
 import { logAuditEvent } from '@/lib/audit';
+import { agentCandidate } from '@/lib/agent-output';
+import {
+  createAssetUseRequest,
+  deliverAssetUse,
+  getAssetUseRequest,
+  listAssetUseRequests,
+} from '@/lib/asset-use-requests';
 import { searchDamAssets } from '@/lib/dam-search';
+import { assetUseWorkflowEnabled } from '@/lib/workflow-flags';
 
 function toolResult(value: unknown) {
   return {
@@ -44,7 +52,9 @@ function createServer(principal: AgentPrincipal) {
       'search_assets',
       {
         title: 'Search PixelSky assets',
-        description: 'Search this workspace\'s connected Cloudinary image library. Results include previews, direct source URLs, and direct attachment download URLs that can be shared with the user.',
+        description: assetUseWorkflowEnabled()
+          ? 'Find candidate images in this workspace. Results include previews and metadata, not delivery links. Request a specific use and wait for human approval before delivery.'
+          : 'Search this workspace\'s connected Cloudinary image library. Results include previews and download links.',
         inputSchema: z.object({
           query: z.string().max(500).describe('Natural-language asset query.'),
           mode: z.enum(['strict', 'semantic']).optional().describe('Use semantic when the workspace has an AI index; strict is the reliable metadata search fallback.'),
@@ -74,7 +84,86 @@ function createServer(principal: AgentPrincipal) {
               console.error('Agent MCP search audit error:', auditError);
             }
           }
-          return toolResult(result);
+          return toolResult(assetUseWorkflowEnabled()
+            ? { ...result, assets: result.assets.map(agentCandidate) }
+            : result);
+        } catch (error) {
+          return toolError(error);
+        }
+      },
+    );
+  }
+
+  if (assetUseWorkflowEnabled() && hasAgentScope(principal, 'asset_uses:request')) {
+    server.registerTool(
+      'request_asset_use',
+      {
+        title: 'Request permission to use a PixelSky image',
+        description: 'Request human review for one image and one explicit use. Does not approve or deliver the image.',
+        inputSchema: z.object({
+          public_id: z.string().min(1).max(512),
+          channel: z.string().min(1).max(80).describe('For example: email, website, paid social, or Figma design.'),
+          campaign: z.string().min(1).max(140),
+          placement: z.string().min(1).max(140).describe('Where the image will appear.'),
+          region: z.string().min(1).max(80).describe('Audience or usage territory, such as US or global.'),
+          purpose: z.string().min(1).max(1_000).describe('What the image will communicate or support.'),
+        }),
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      },
+      async (input) => {
+        try {
+          return toolResult({ request: await createAssetUseRequest(principal.orgId, principal.actorId, input) });
+        } catch (error) {
+          return toolError(error);
+        }
+      },
+    );
+  }
+
+  if (assetUseWorkflowEnabled() && hasAgentScope(principal, 'asset_uses:read')) {
+    server.registerTool(
+      'list_asset_use_requests',
+      {
+        title: 'List PixelSky asset-use requests',
+        description: 'Check whether image-use requests are pending, approved, rejected, or revoked.',
+        inputSchema: z.object({ status: z.enum(['pending', 'approved', 'rejected', 'revoked']).optional() }),
+        annotations: { readOnlyHint: true },
+      },
+      async ({ status }) => {
+        try {
+          return toolResult({ requests: await listAssetUseRequests(principal.orgId, status) });
+        } catch (error) {
+          return toolError(error);
+        }
+      },
+    );
+    server.registerTool(
+      'get_asset_use_request',
+      {
+        title: 'Get a PixelSky asset-use request',
+        description: 'Check the current approval state and intended use for one request.',
+        inputSchema: z.object({ id: z.string().uuid() }),
+        annotations: { readOnlyHint: true },
+      },
+      async ({ id }) => {
+        try {
+          return toolResult({ request: await getAssetUseRequest(principal.orgId, id) });
+        } catch (error) {
+          return toolError(error);
+        }
+      },
+    );
+    server.registerTool(
+      'get_asset_delivery',
+      {
+        title: 'Get an approved PixelSky image',
+        description: 'Return image and download links only when this exact use was approved and the Cloudinary asset has not changed.',
+        inputSchema: z.object({ id: z.string().uuid() }),
+        annotations: { readOnlyHint: true },
+      },
+      async ({ id }) => {
+        try {
+          return toolResult(await deliverAssetUse(principal.orgId, principal.actorId, id));
         } catch (error) {
           return toolError(error);
         }

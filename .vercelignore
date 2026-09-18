@@ -1,0 +1,6 @@
+.DS_Store
+.next/
+.vercel/
+node_modules/
+injector-system/
+minimal-os-mcp/

@@ -98,18 +98,51 @@ export function buildAssetExpression(folder?: string | null) {
   return `resource_type:image AND type:upload${folderExpression}`;
 }
 
+export function assetIsInWorkspaceFolder(
+  asset: { folder?: string | null; asset_folder?: string | null; public_id: string },
+  folder?: string | null,
+) {
+  const scope = folder?.trim().replace(/^\/+|\/+$/g, '');
+  if (!scope) return true;
+  const actual = asset.asset_folder ?? asset.folder ?? asset.public_id.split('/').slice(0, -1).join('/');
+  return actual === scope || actual.startsWith(`${scope}/`);
+}
+
+// Search without a folder expression: Cloudinary's folder and asset_folder fields
+// differ between fixed-folder and dynamic-folder accounts.
+export async function scanImageAssets(
+  settings: CloudinarySettings,
+  maxAssets = 5_000,
+  expression = 'resource_type:image AND type:upload',
+) {
+  const resources: any[] = [];
+  let cursor: string | undefined;
+  do {
+    const query = cloudinary.search
+      .expression(expression)
+      .sort_by('created_at', 'desc')
+      .with_field('context')
+      .with_field('metadata')
+      .with_field('tags')
+      .max_results(500);
+    if (cursor) query.next_cursor(cursor);
+    const page = await (query as any).execute({
+      cloud_name: settings.cloudName,
+      api_key: settings.apiKey,
+      api_secret: settings.apiSecret,
+    });
+    resources.push(...(page.resources ?? []));
+    cursor = page.next_cursor ?? undefined;
+    if (cursor && resources.length >= maxAssets) {
+      throw new Error(`The connected Cloudinary library exceeds the ${maxAssets}-asset search limit. Narrow the workspace folder or contact support.`);
+    }
+  } while (cursor);
+  return resources;
+}
+
 export async function getAssetCount(settings: CloudinarySettings, maxResults: number) {
-  configureCloudinary(settings);
-  const expression = buildAssetExpression(settings.folder);
-  const searchQuery = cloudinary.search
-    .expression(expression)
-    .sort_by('created_at', 'desc')
-    .max_results(maxResults);
-  const result = await searchQuery.execute();
-  if (typeof result.total_count === 'number') {
-    return result.total_count;
-  }
-  return Array.isArray(result.resources) ? result.resources.length : 0;
+  const assets = await scanImageAssets(settings, Math.max(maxResults, 5_000));
+  return assets.filter((asset) => assetIsInWorkspaceFolder(asset, settings.folder)).length;
 }
 
 export async function getAssetsByIds(

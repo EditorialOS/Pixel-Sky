@@ -26,7 +26,13 @@ const SCOPE_LABELS: Record<AgentScope, string> = {
   'asset_packs:read': 'Read approved packs',
   'asset_packs:write': 'Create draft packs',
   'asset_packs:approve': 'Approve draft packs',
+  'asset_uses:read': 'Read approved uses and delivery links',
+  'asset_uses:request': 'Request asset use',
 };
+
+const WORKFLOW_ENABLED = process.env.NEXT_PUBLIC_PIXELSKY_ASSET_USES_ENABLED === 'true';
+const VISIBLE_SCOPES = AGENT_SCOPES.filter((scope) => WORKFLOW_ENABLED || !scope.startsWith('asset_uses:'));
+const INITIAL_SCOPES = DEFAULT_AGENT_SCOPES.filter((scope) => WORKFLOW_ENABLED || !scope.startsWith('asset_uses:'));
 
 function endpointFor(connection: AgentConnectionRecord) {
   return `${window.location.origin}/api/mcp/${connection.id}`;
@@ -35,7 +41,7 @@ function endpointFor(connection: AgentConnectionRecord) {
 export default function AgentSettingsPage() {
   const [connections, setConnections] = useState<AgentConnectionRecord[]>([]);
   const [connectionName, setConnectionName] = useState('PixelSky for ChatGPT');
-  const [connectionScopes, setConnectionScopes] = useState<AgentScope[]>([...DEFAULT_AGENT_SCOPES]);
+  const [connectionScopes, setConnectionScopes] = useState<AgentScope[]>([...INITIAL_SCOPES]);
   const [connectionEndpoint, setConnectionEndpoint] = useState<string | null>(null);
   const [oauthReady, setOauthReady] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -44,7 +50,7 @@ export default function AgentSettingsPage() {
 
   const [keys, setKeys] = useState<AgentApiKeyRecord[]>([]);
   const [name, setName] = useState('Technical MCP client');
-  const [scopes, setScopes] = useState<AgentScope[]>([...DEFAULT_AGENT_SCOPES]);
+  const [scopes, setScopes] = useState<AgentScope[]>([...INITIAL_SCOPES]);
   const [token, setToken] = useState<string | null>(null);
   const [keyError, setKeyError] = useState<string | null>(null);
   const [keyLoading, setKeyLoading] = useState(true);
@@ -253,7 +259,7 @@ export default function AgentSettingsPage() {
             <fieldset className="md:col-span-2">
               <legend className="text-sm font-medium">Permissions</legend>
               <div className="mt-3 flex flex-wrap gap-3">
-                {AGENT_SCOPES.map((scope) => (
+                {VISIBLE_SCOPES.map((scope) => (
                   <label key={scope} className="inline-flex items-center gap-2 rounded-full border border-black/10 px-3 py-2 text-xs text-os-muted">
                     <input
                       type="checkbox"
@@ -338,7 +344,7 @@ export default function AgentSettingsPage() {
             <fieldset className="md:col-span-2">
               <legend className="text-sm font-medium">Permissions</legend>
               <div className="mt-3 flex flex-wrap gap-3">
-                {AGENT_SCOPES.map((scope) => (
+                {VISIBLE_SCOPES.map((scope) => (
                   <label key={scope} className="inline-flex items-center gap-2 rounded-full border border-black/10 px-3 py-2 text-xs text-os-muted">
                     <input type="checkbox" checked={scopes.includes(scope)} onChange={() => toggleScope(scope)} className="accent-os-accent" />
                     {SCOPE_LABELS[scope]}

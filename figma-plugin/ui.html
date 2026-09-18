@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root { --ink:#282722; --muted:#77736b; --line:#e6e1d8; --paper:#fcfaf6; --accent:#376575; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font:13px/1.45 ui-sans-serif, sans-serif; }
+    header { padding:21px 22px 17px; border-bottom:1px solid var(--line); background:#fffdfa; }
+    .eyebrow { color:var(--accent); font-size:10px; font-weight:700; letter-spacing:.25em; text-transform:uppercase; }
+    h1 { margin:5px 0 3px; font:600 26px/1.1 Georgia,serif; }
+    p { margin:0; }
+    .muted { color:var(--muted); }
+    main { padding:18px 22px 26px; }
+    button,input { font:inherit; }
+    button { cursor:pointer; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--ink); padding:9px 12px; }
+    button:hover { border-color:var(--accent); }
+    button.primary { border-color:var(--accent); background:var(--accent); color:#fff; font-weight:650; }
+    button.small { padding:6px 9px; font-size:11px; }
+    input { width:100%; border:1px solid var(--line); border-radius:10px; background:#fff; padding:10px 11px; color:var(--ink); }
+    label { display:block; margin:10px 0; color:var(--muted); font-size:11px; text-transform:capitalize; }
+    label input { display:block; margin-top:4px; color:var(--ink); font-size:13px; }
+    .row { display:flex; gap:8px; align-items:center; }
+    .grow { flex:1; }
+    .section { margin-top:24px; }
+    h2 { margin:0 0 10px; font-size:15px; }
+    .card { padding:12px; border:1px solid var(--line); border-radius:14px; background:#fff; margin:9px 0; }
+    .card img { width:56px; height:56px; object-fit:cover; border-radius:8px; }
+    .break { overflow-wrap:anywhere; }
+    .badge { display:inline-block; padding:3px 7px; border:1px solid var(--line); border-radius:99px; font-size:10px; text-transform:uppercase; letter-spacing:.08em; }
+    .message { margin:0 0 15px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; }
+    .hidden { display:none; }
+    .divider { border:0; border-top:1px solid var(--line); margin:18px 0; }
+  </style>
+</head>
+<body>
+  <header><span class="eyebrow">PixelSky / Figma</span><h1>Find. Approve. Place.</h1><p class="muted">Your Cloudinary library, with a use decision attached.</p></header>
+  <main>
+    <p id="message" class="message hidden" role="status"></p>
+    <div id="connect"><p class="muted">Connect your PixelSky workspace to start searching.</p><button class="primary section" id="connectButton">Connect PixelSky</button></div>
+    <div id="workspace" class="hidden">
+      <div class="row"><input id="query" class="grow" placeholder="Search tags, campaigns, image number" /><button class="primary" id="searchButton">Search</button></div>
+      <div id="results" class="section"></div>
+      <div id="requestForm" class="section hidden"><hr class="divider" /><h2 id="selectedTitle">Request image use</h2><form id="useForm"><label>Channel<input name="channel" required placeholder="Website, email, social, Figma design" /></label><label>Campaign<input name="campaign" required /></label><label>Placement<input name="placement" required placeholder="Hero, card, header, story" /></label><label>Region<input name="region" required placeholder="US or global" /></label><label>Purpose<input name="purpose" required placeholder="What is this image for?" /></label><button class="primary" type="submit">Request approval</button></form></div>
+      <div class="section"><hr class="divider" /><div class="row"><h2 class="grow">Use requests</h2><button class="small" id="refreshButton">Refresh</button></div><p class="muted">Approved images can be placed into a selected shape or as a new rectangle.</p><div id="requests"></div></div>
+      <div class="section"><button class="small" id="disconnectButton">Disconnect</button></div>
+    </div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let selected = null;
+    const post = (type, data = {}) => parent.postMessage({ pluginMessage: { type, ...data } }, '*');
+    function message(value) { $('message').textContent = value; $('message').classList.toggle('hidden', !value); }
+    function setConnected(value) { $('connect').classList.toggle('hidden', value); $('workspace').classList.toggle('hidden', !value); }
+    $('connectButton').onclick = () => { message('Opening PixelSky sign-in…'); post('CONNECT'); };
+    $('disconnectButton').onclick = () => { post('DISCONNECT'); message('Disconnected.'); };
+    $('searchButton').onclick = () => post('SEARCH', { query: $('query').value });
+    $('query').onkeydown = (event) => { if (event.key === 'Enter') { event.preventDefault(); $('searchButton').click(); } };
+    $('refreshButton').onclick = () => post('REFRESH');
+    $('useForm').onsubmit = (event) => { event.preventDefault(); if (!selected) return; const form = new FormData(event.target); post('REQUEST', { request: { public_id: selected.public_id, ...Object.fromEntries(form) } }); };
+    function renderResults(assets, outsideScopeMatches) {
+      const root = $('results'); root.replaceChildren();
+      const title = document.createElement('h2'); title.textContent = `${assets.length} candidate${assets.length === 1 ? '' : 's'}`; root.append(title);
+      if (!assets.length && outsideScopeMatches) { const note = document.createElement('p'); note.className = 'muted'; note.textContent = `${outsideScopeMatches} matching images are outside this workspace folder.`; root.append(note); }
+      for (const asset of assets) {
+        const card = document.createElement('div'); card.className = 'card row';
+        const img = document.createElement('img'); img.src = asset.preview_url; img.alt = asset.filename;
+        const info = document.createElement('div'); info.className = 'grow';
+        const name = document.createElement('strong'); name.className = 'break'; name.textContent = asset.filename;
+        const tags = document.createElement('p'); tags.className = 'muted'; tags.textContent = (asset.tags || []).slice(0, 4).join(', ');
+        info.append(name, tags);
+        const button = document.createElement('button'); button.className = 'small'; button.textContent = 'Request';
+        button.onclick = () => { selected = asset; $('selectedTitle').textContent = `Request use: ${asset.filename}`; $('requestForm').classList.remove('hidden'); $('requestForm').scrollIntoView({ behavior: 'smooth' }); };
+        card.append(img, info, button); root.append(card);
+      }
+    }
+    function renderRequests(requests) {
+      const root = $('requests'); root.replaceChildren();
+      if (!requests.length) { const note = document.createElement('p'); note.className = 'muted section'; note.textContent = 'No requests yet.'; root.append(note); }
+      for (const request of requests) {
+        const card = document.createElement('div'); card.className = 'card';
+        const top = document.createElement('div'); top.className = 'row';
+        const title = document.createElement('strong'); title.className = 'grow break'; title.textContent = request.public_id;
+        const status = document.createElement('span'); status.className = 'badge'; status.textContent = request.status;
+        top.append(title, status);
+        const details = document.createElement('p'); details.className = 'muted'; details.textContent = `${request.channel} · ${request.campaign} · ${request.region}`;
+        card.append(top, details);
+        if (request.status === 'approved') { const button = document.createElement('button'); button.className = 'primary small section'; button.textContent = 'Place in Figma'; button.onclick = () => post('PLACE', { id: request.id }); card.append(button); }
+        root.append(card);
+      }
+    }
+    onmessage = (event) => {
+      const data = event.data.pluginMessage; if (!data) return;
+      switch (data.type) {
+        case 'STATE': setConnected(data.connected); break;
+        case 'CONNECTED': setConnected(true); message(data.message); break;
+        case 'DISCONNECTED': setConnected(false); break;
+        case 'PAIRING': case 'ERROR': case 'REQUESTED': case 'PLACED': message(data.message); break;
+        case 'RESULTS': renderResults(data.assets, data.outsideScopeMatches); break;
+        case 'REQUESTS': renderRequests(data.requests); break;
+      }
+    };
+  </script>
+</body>
+</html>

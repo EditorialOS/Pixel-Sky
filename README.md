@@ -1,5 +1,7 @@
 # PixelSky (Light DAM)
 
+For the new agent/Figma use-approval workflow, see `docs/agent-workflow.md`. Its schema is in `supabase/migrations/202609180001_asset_use_requests.sql`; do not deploy the workflow before applying that migration. Figma developer source is in `figma-plugin/`.
+
 PixelSky is a lightweight digital asset manager (Light DAM) designed for small marketing teams
 who need a fast, searchable library of images (20-50 assets, not thousands). It uses
 Cloudinary as the single source of truth for storage, metadata, previews, and download

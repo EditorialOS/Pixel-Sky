@@ -34,6 +34,8 @@ type DamSearchResponse = {
   error?: string;
   missing?: string[];
   ai_fallback?: boolean;
+  workspace_folder?: string | null;
+  outside_scope_matches?: number;
 };
 
 type UploadSignatureResponse = {
@@ -586,6 +588,11 @@ export default function LightDamPage() {
                 >
                   Asset packs
                 </a>
+                {process.env.NEXT_PUBLIC_PIXELSKY_ASSET_USES_ENABLED === 'true' && (
+                  <a href="/asset-uses" className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-os-text transition hover:bg-os-bg">
+                    Use approvals
+                  </a>
+                )}
                 <a
                   href="/settings/agents"
                   className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-os-text shadow-sm transition hover:bg-os-bg"
@@ -694,6 +701,14 @@ export default function LightDamPage() {
                 Build AI index
               </a>
             </div>
+          </div>
+        )}
+
+        {!error && results.query && results.assets.length === 0 && Boolean(results.outside_scope_matches) && (
+          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+            {results.outside_scope_matches} matching asset{results.outside_scope_matches === 1 ? '' : 's'} found in Cloudinary, but outside this workspace&apos;s folder
+            {results.workspace_folder ? ` (${results.workspace_folder})` : ''}. Check the folder in{' '}
+            <a href="/settings/cloudinary" className="font-semibold underline">Cloudinary settings</a>.
           </div>
         )}
 

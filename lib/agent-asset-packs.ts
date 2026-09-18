@@ -5,9 +5,11 @@ import {
   buildPackAsset,
 } from '@/lib/asset-packs';
 import { logAuditEvent } from '@/lib/audit';
-import { getAssetsByIds, getCloudinarySettingsForOrg } from '@/lib/cloudinary';
+import { agentDraftPack } from '@/lib/agent-output';
+import { assetIsInWorkspaceFolder, getAssetsByIds, getCloudinarySettingsForOrg } from '@/lib/cloudinary';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { getVariantPresetById } from '@/lib/variants';
+import { assetUseWorkflowEnabled } from '@/lib/workflow-flags';
 
 export type CreateAgentAssetPackRequest = {
   title?: string;
@@ -64,16 +66,6 @@ function cleanCandidates(value: unknown): AssetPackCandidateInput[] {
     });
   }
   return candidates.slice(0, MAX_ASSETS);
-}
-
-function assetIsInWorkspaceFolder(
-  asset: { folder?: string | null; public_id: string },
-  folder?: string | null,
-) {
-  const workspaceFolder = folder?.trim();
-  if (!workspaceFolder) return true;
-  const assetFolder = asset.folder || asset.public_id.split('/').slice(0, -1).join('/');
-  return assetFolder === workspaceFolder || assetFolder.startsWith(`${workspaceFolder}/`);
 }
 
 function asDatabaseError(error: unknown) {
@@ -189,7 +181,9 @@ export async function createAgentAssetPackDraft({
       console.error('Asset pack audit error:', auditError);
     }
 
-    return { pack, manifest: buildAgentAssetPackManifest(pack, settings.cloudName) };
+    return assetUseWorkflowEnabled()
+      ? { pack: agentDraftPack(pack) }
+      : { pack, manifest: buildAgentAssetPackManifest(pack, settings.cloudName) };
   } catch (error) {
     if (error instanceof AssetPackServiceError) throw error;
     console.error('Agent asset pack creation error:', error);

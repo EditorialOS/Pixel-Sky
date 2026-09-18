@@ -1,9 +1,11 @@
 import { v2 as cloudinary } from 'cloudinary';
 import {
+  assetIsInWorkspaceFolder,
   cloudinaryErrorMessage,
   getAssetsByIds,
   getCloudinarySettingsForOrg,
   logCloudinaryError,
+  scanImageAssets,
 } from '@/lib/cloudinary';
 import { createEmbeddings } from '@/lib/embeddings';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -25,6 +27,7 @@ export type DamAsset = {
   id: string;
   public_id: string;
   asset_id?: string;
+  version?: number;
   asset_number?: string;
   filename: string;
   folder?: string | null;
@@ -46,7 +49,6 @@ export type DamAsset = {
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
-const MAX_FETCH = 100; // PixelSky (Light DAM) targets small libraries (20-50 assets)
 
 export type DamSearchResult = {
   query: string;
@@ -55,6 +57,8 @@ export type DamSearchResult = {
   next_cursor: string | null;
   mode: SearchMode;
   ai_fallback: boolean;
+  workspace_folder: string | null;
+  outside_scope_matches: number;
 };
 
 export class DamSearchError extends Error {
@@ -69,13 +73,6 @@ const STOPWORDS = new Set([
   'from', 'by', 'is', 'are', 'be', 'this', 'that', 'these', 'those', 'show',
   'find', 'search', 'get', 'need', 'looking',
 ]);
-
-function escapeExpressionValue(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  const escaped = trimmed.replace(/"/g, '\\"');
-  return /\s/.test(escaped) ? `"${escaped}"` : escaped;
-}
 
 function normalizeRecord(value: unknown): Record<string, string> {
   if (!value || typeof value !== 'object') return {};
@@ -108,6 +105,12 @@ function parseQuery(rawQuery: string) {
     .slice(0, 8);
 
   return { assetId, terms };
+}
+
+export function buildTagExpression(query: string) {
+  const terms = parseQuery(query).terms.filter((term) => /^[a-z0-9]+$/.test(term));
+  if (terms.length === 0) return null;
+  return `resource_type:image AND type:upload AND (${terms.map((term) => `tags:${term}`).join(' OR ')})`;
 }
 
 function buildSearchableText(asset: {
@@ -145,6 +148,20 @@ function scoreAsset(
     if (searchable.includes(term)) score += 1;
   }
   return score / terms.length;
+}
+
+export function rankStrictAssets(resources: any[], query: string) {
+  const parsedQuery = parseQuery(query);
+  if (parsedQuery.assetId) {
+    return resources.filter((asset) =>
+      buildSearchableText(toSearchAsset(asset)).includes(parsedQuery.assetId as string),
+    );
+  }
+  return resources
+    .map((asset) => ({ asset, score: scoreAsset(toSearchAsset(asset), parsedQuery.terms) }))
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(({ asset }) => asset);
 }
 
 function buildPreviewUrl(publicId: string, cloudName: string) {
@@ -212,6 +229,7 @@ function mapAsset(asset: any, cloudName: string): DamAsset {
     id: asset.asset_id || asset.public_id,
     public_id: asset.public_id,
     asset_id: asset.asset_id,
+    version: asset.version,
     asset_number: assetNumber,
     filename,
     folder: asset.folder ?? null,
@@ -297,7 +315,6 @@ export async function searchDamAssets(
   input: DamSearchRequest,
 ): Promise<DamSearchResult> {
   const query = typeof input.query === 'string' ? input.query.slice(0, 500) : '';
-  const cursor = typeof input.cursor === 'string' ? input.cursor.slice(0, 1_000) : undefined;
   const mode: SearchMode = input.mode === 'semantic' && query.trim() ? 'semantic' : 'strict';
   const isSemantic = mode === 'semantic';
   const limit = normalizeLimit(input.limit);
@@ -313,35 +330,20 @@ export async function searchDamAssets(
     throw new DamSearchError('Cloudinary is not connected for this workspace.', 400);
   }
 
-  const folder = settings.folder?.trim();
-  const folderExpression = folder ? ` AND folder:${escapeExpressionValue(folder)}` : '';
-  const expression = `resource_type:image AND type:upload${folderExpression}`;
-
-  const searchQuery = cloudinary.search
-    .expression(expression)
-    .sort_by('created_at', 'desc')
-    .with_field('context')
-    .with_field('metadata')
-    .with_field('tags')
-    .max_results(MAX_FETCH);
-
-  if (cursor) {
-    searchQuery.next_cursor(cursor);
-  }
-
-  let result;
+  let allResources: any[];
   try {
-    result = await (searchQuery as any).execute({
-      cloud_name: settings.cloudName,
-      api_key: settings.apiKey,
-      api_secret: settings.apiSecret,
-    });
+    allResources = await scanImageAssets(settings);
   } catch (error) {
     logCloudinaryError('Cloudinary asset search failed', error);
-    throw new DamSearchError(cloudinaryErrorMessage(error), 400);
+    const message = error instanceof Error && error.message.includes('search limit')
+      ? error.message
+      : cloudinaryErrorMessage(error);
+    throw new DamSearchError(message, 400);
   }
-  const parsedQuery = parseQuery(query);
-  const resources = result.resources ?? [];
+  const resources = allResources.filter((asset) => assetIsInWorkspaceFolder(asset, settings.folder));
+  let outsideScopeMatches = query.trim()
+    ? rankStrictAssets(allResources.filter((asset) => !assetIsInWorkspaceFolder(asset, settings.folder)), query).length
+    : 0;
   let filtered: any[] = [];
   let aiFallback = false;
 
@@ -364,7 +366,9 @@ export async function searchDamAssets(
       if (publicIds.length > 0) {
         const semanticResources = await getAssetsByIds(publicIds, settings);
         const resourceMap = new Map(semanticResources.map((asset: any) => [asset.public_id, asset]));
-        filtered = publicIds.map((id: string) => resourceMap.get(id)).filter(Boolean);
+        filtered = publicIds.map((id: string) => resourceMap.get(id))
+          .filter((asset: any) => asset && assetIsInWorkspaceFolder(asset, settings.folder));
+        if (filtered.length === 0) aiFallback = true;
       } else {
         aiFallback = true;
       }
@@ -375,19 +379,24 @@ export async function searchDamAssets(
   }
 
   if (!isSemantic || aiFallback) {
-    if (parsedQuery.assetId) {
-      filtered = resources.filter((asset: any) =>
-        buildSearchableText(toSearchAsset(asset)).includes(parsedQuery.assetId as string),
-      );
-    } else {
-      const scored = resources
-        .map((asset: any) => {
-          const score = scoreAsset(toSearchAsset(asset), parsedQuery.terms);
-          return score > 0 ? { asset, score } : null;
-        })
-        .filter((item: { asset: any; score: number } | null): item is { asset: any; score: number } => item !== null);
-      scored.sort((a: { score: number }, b: { score: number }) => b.score - a.score);
-      filtered = scored.map((item: { asset: any; score: number }) => item.asset);
+    filtered = rankStrictAssets(resources, query);
+    const tagExpression = buildTagExpression(query);
+    if (tagExpression) {
+      try {
+        const tagged = await scanImageAssets(settings, 5_000, tagExpression);
+        const inScope = tagged.filter((asset) => assetIsInWorkspaceFolder(asset, settings.folder));
+        const outOfScope = tagged.filter((asset) => !assetIsInWorkspaceFolder(asset, settings.folder));
+        const merged = new Map<string, any>();
+        for (const asset of [...inScope, ...filtered]) merged.set(asset.public_id, asset);
+        filtered = [...merged.values()];
+        const outsideIds = new Set([
+          ...rankStrictAssets(allResources.filter((asset) => !assetIsInWorkspaceFolder(asset, settings.folder)), query).map((asset) => asset.public_id),
+          ...outOfScope.map((asset) => asset.public_id),
+        ]);
+        outsideScopeMatches = outsideIds.size;
+      } catch (error) {
+        logCloudinaryError('Cloudinary tag lookup failed', error);
+      }
     }
   }
 
@@ -397,8 +406,10 @@ export async function searchDamAssets(
     query,
     total: filtered.length,
     assets,
-    next_cursor: result.next_cursor ?? null,
+    next_cursor: null,
     mode,
     ai_fallback: aiFallback,
+    workspace_folder: settings.folder?.trim() || null,
+    outside_scope_matches: outsideScopeMatches,
   };
 }

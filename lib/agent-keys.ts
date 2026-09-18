@@ -5,6 +5,7 @@ import {
   DEFAULT_AGENT_SCOPES,
 } from '@/lib/agent-scopes';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { assetUseWorkflowEnabled } from '@/lib/workflow-flags';
 
 export { AGENT_SCOPES, DEFAULT_AGENT_SCOPES } from '@/lib/agent-scopes';
 export type { AgentScope } from '@/lib/agent-scopes';
@@ -18,6 +19,7 @@ export type AgentApiKeyRecord = {
   created_by: string;
   last_used_at: string | null;
   revoked_at: string | null;
+  expires_at?: string | null;
   created_at: string;
 };
 
@@ -52,11 +54,13 @@ export async function createAgentApiKey({
   userId,
   name,
   scopes = DEFAULT_AGENT_SCOPES,
+  expiresAt,
 }: {
   orgId: string;
   userId: string;
   name: string;
   scopes?: AgentScope[];
+  expiresAt?: string;
 }) {
   const token = `psk_live_${randomBytes(32).toString('base64url')}`;
   const tokenPrefix = token.slice(0, 17);
@@ -75,8 +79,11 @@ export async function createAgentApiKey({
       token_hash: hashAgentKey(token),
       scopes: normalizedScopes,
       created_by: userId,
+      ...(expiresAt ? { expires_at: expiresAt } : {}),
     })
-    .select('id, org_id, name, token_prefix, scopes, created_by, last_used_at, revoked_at, created_at')
+    .select(assetUseWorkflowEnabled()
+      ? 'id, org_id, name, token_prefix, scopes, created_by, last_used_at, revoked_at, expires_at, created_at'
+      : 'id, org_id, name, token_prefix, scopes, created_by, last_used_at, revoked_at, created_at')
     .single();
 
   if (error) throw error;
@@ -87,7 +94,9 @@ export async function listAgentApiKeys(orgId: string) {
   const supabase = getSupabaseAdmin();
   const { data, error } = await (supabase as any)
     .from('agent_api_keys')
-    .select('id, org_id, name, token_prefix, scopes, created_by, last_used_at, revoked_at, created_at')
+    .select(assetUseWorkflowEnabled()
+      ? 'id, org_id, name, token_prefix, scopes, created_by, last_used_at, revoked_at, expires_at, created_at'
+      : 'id, org_id, name, token_prefix, scopes, created_by, last_used_at, revoked_at, created_at')
     .eq('org_id', orgId)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -125,12 +134,15 @@ export async function authenticateAgentApiKey(request: Request): Promise<AgentPr
   const supabase = getSupabaseAdmin();
   const { data, error } = await (supabase as any)
     .from('agent_api_keys')
-    .select('id, org_id, name, scopes')
+    .select(assetUseWorkflowEnabled()
+      ? 'id, org_id, name, scopes, expires_at'
+      : 'id, org_id, name, scopes')
     .eq('token_hash', hashAgentKey(match[1]))
     .is('revoked_at', null)
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
+  if (data.expires_at && new Date(data.expires_at).getTime() <= Date.now()) return null;
 
   const principal: AgentPrincipal = {
     id: data.id,

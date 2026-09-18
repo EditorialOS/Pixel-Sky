@@ -16,7 +16,12 @@ export type AuditAction =
   | 'agent_key_revoked'
   | 'agent_connection_created'
   | 'agent_connection_revoked'
-  | 'agent_mcp_search';
+  | 'agent_mcp_search'
+  | 'asset_use_requested'
+  | 'asset_use_approved'
+  | 'asset_use_rejected'
+  | 'asset_use_revoked'
+  | 'asset_use_delivered';
 
 export type AuditEvent = {
   orgId: string;

@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { v2 as cloudinary } from 'cloudinary';
 import { auth } from '@clerk/nextjs/server';
 import {
-  buildAssetExpression,
+  assetIsInWorkspaceFolder,
   cloudinaryErrorMessage,
-  configureCloudinary,
   getAssetsByIds,
   getCloudinarySettingsForOrg,
   logCloudinaryError,
+  scanImageAssets,
 } from '@/lib/cloudinary';
 import { buildEmbeddingText, createEmbeddings, upsertAssetEmbeddings } from '@/lib/embeddings';
 import { logAuditEvent } from '@/lib/audit';
@@ -42,32 +41,21 @@ export async function POST(request: NextRequest) {
   const payload = (await request.json()) as IndexRequest;
   const publicIds = payload.publicIds ?? [];
 
-  configureCloudinary(settings);
-
   let resources: any[] = [];
   let nextCursor: string | null = null;
 
   try {
     if (publicIds.length > 0) {
-      resources = await getAssetsByIds(publicIds);
+      resources = await getAssetsByIds(publicIds, settings);
     } else {
-      const expression = buildAssetExpression(settings.folder);
-      const searchQuery = cloudinary.search
-        .expression(expression)
-        .sort_by('created_at', 'desc')
-        .with_field('context')
-        .with_field('metadata')
-        .with_field('tags')
-        .max_results(MAX_INDEX);
-
-      if (payload.cursor) {
-        searchQuery.next_cursor(payload.cursor);
-      }
-
-      const result = await searchQuery.execute();
-      resources = result.resources ?? [];
-      nextCursor = result.next_cursor ?? null;
+      const scoped = (await scanImageAssets(settings))
+        .filter((asset) => assetIsInWorkspaceFolder(asset, settings.folder));
+      const requestedOffset = Number(payload.cursor ?? '0');
+      const offset = Number.isSafeInteger(requestedOffset) && requestedOffset >= 0 ? requestedOffset : 0;
+      resources = scoped.slice(offset, offset + MAX_INDEX);
+      nextCursor = offset + MAX_INDEX < scoped.length ? String(offset + MAX_INDEX) : null;
     }
+    resources = resources.filter((asset) => assetIsInWorkspaceFolder(asset, settings.folder));
   } catch (error) {
     logCloudinaryError('Cloudinary AI indexing failed', error);
     return NextResponse.json({ error: cloudinaryErrorMessage(error) }, { status: 400 });

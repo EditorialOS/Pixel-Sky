@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v2 as cloudinary } from 'cloudinary';
 import { auth } from '@clerk/nextjs/server';
-import { configureCloudinary, getCloudinarySettingsForOrg } from '@/lib/cloudinary';
+import { assetIsInWorkspaceFolder, getAssetsByIds, getCloudinarySettingsForOrg } from '@/lib/cloudinary';
 import { getVariantPresetById } from '@/lib/variants';
 import { logAuditEvent } from '@/lib/audit';
 
@@ -31,11 +31,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Cloudinary is not connected for this workspace.' }, { status: 400 });
   }
 
-  configureCloudinary(settings);
+  try {
+    const assets = await getAssetsByIds([publicId], settings);
+    if (!assets.some((asset: any) => asset.public_id === publicId && assetIsInWorkspaceFolder(asset, settings.folder))) {
+      return NextResponse.json({ error: 'Asset is not available in this workspace.' }, { status: 404 });
+    }
+  } catch (error) {
+    console.error('Cloudinary download verification failed:', error);
+    return NextResponse.json({ error: 'Unable to verify this asset.' }, { status: 502 });
+  }
 
   const preset = presetId ? getVariantPresetById(presetId) : null;
 
   const downloadUrl = cloudinary.url(publicId, {
+    cloud_name: settings.cloudName,
     secure: true,
     resource_type: 'image',
     type: 'upload',
