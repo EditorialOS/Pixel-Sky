@@ -226,7 +226,37 @@ Current authenticated API primitives:
 Each pack snapshots delivery URLs, metadata, selected variants, and review state. Cloudinary
 remains the media source of truth; PixelSky owns the agent-facing manifest and audit trail.
 
-## Remote MCP For Agents
+## Chat App Connections (No Key)
+
+PixelSky can expose one revocable, OAuth-protected MCP endpoint per workspace. This is
+the path for non-technical users connecting Claude or another remote MCP client:
+
+1. A workspace admin opens `/settings/agents`, creates a chat connection, and chooses its permissions.
+2. They paste the generated endpoint into the chat client's custom connector setting.
+3. Each teammate signs in with their own PixelSky account. PixelSky verifies that person is a member of the selected workspace before any tool is available.
+4. A workspace admin can revoke the connection at any time. This immediately blocks every user and client using that endpoint.
+
+The endpoint itself is workspace-bound. OAuth identifies the user; the PixelSky connection
+record determines the allowed asset and pack actions. A chat client cannot request extra
+PixelSky permissions during sign-in.
+
+### OAuth operator setup
+
+Run `supabase/migrations/202609170003_agent_mcp_connections.sql`, expose
+`agent_mcp_connections` through Supabase Data API, and keep RLS enabled.
+
+In Clerk's **OAuth applications** settings:
+
+1. Enable **Publish DCR support** for Claude and ChatGPT custom connectors.
+2. Set default scopes to `openid profile email offline_access` so a client that omits a scope still receives a renewable login.
+3. Require PKCE and keep the OAuth consent screen enabled.
+4. Set `PIXELSKY_OAUTH_ISSUER` in Vercel to the Clerk Frontend API origin, for example `https://your-instance.clerk.accounts.dev`.
+
+Dynamic Client Registration exposes an unauthenticated client-registration endpoint. Enable it
+only for the initial remote-connector rollout, monitor the clients Clerk records, and turn it
+off if PixelSky moves to a pre-registered client or Client ID Metadata Documents flow.
+
+## Remote MCP For Technical Clients
 
 PixelSky exposes a remote MCP endpoint at:
 
@@ -248,8 +278,8 @@ It currently provides these tools according to the key's scopes:
 - `approve_asset_pack` is available only with the explicit `asset_packs:approve` scope and is audit logged.
 
 Default keys can search, read approved packs, and create drafts. Add `asset_packs:approve` only
-to a deliberately trusted agent connection. The static-key MCP release works with compatible
-MCP clients; browser OAuth is still required for a one-click ChatGPT app installation.
+to a deliberately trusted agent connection. Static keys remain available for technical MCP
+clients that cannot launch a browser OAuth sign-in.
 
 ## Metadata Conventions
 
@@ -300,7 +330,7 @@ This repo can be imported into Replit directly from GitHub.
 Use this checklist before selling publicly:
 
 1. Set production auth keys in Vercel (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`) and verify they are not Clerk dev/test keys.
-2. Run Supabase migrations for `organization_cloudinary`, `audit_logs`, `asset_packs`, `asset_embeddings`, `organization_billing`, `waitlist_signups`, and `agent_api_keys`; expose the required tables and `match_asset_embeddings` through Supabase Data API with RLS enabled.
+2. Run Supabase migrations for `organization_cloudinary`, `audit_logs`, `asset_packs`, `asset_embeddings`, `organization_billing`, `waitlist_signups`, `agent_api_keys`, and `agent_mcp_connections`; expose the required tables and `match_asset_embeddings` through Supabase Data API with RLS enabled.
 3. Configure Stripe live mode keys, create live prices, and register `/api/stripe/webhook`.
 4. Connect a Cloudinary account, upload test assets, and run **Build AI index** in `/settings/cloudinary`.
 5. Verify these flows end-to-end:
@@ -308,6 +338,7 @@ Use this checklist before selling publicly:
    - semantic search and strict search
    - upload + download + variant generation
    - checkout + webhook status updates
+   - OAuth chat connection: create, sign in as a workspace member, search assets, revoke, and confirm access is removed
    - `/audit` event visibility
    - `/asset-packs` draft, approval, and JSON manifest flows
    - `/settings/agents` key creation, revocation, MCP search, draft creation, explicit agent approval, and attachment download links

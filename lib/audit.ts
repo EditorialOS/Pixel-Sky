@@ -14,6 +14,8 @@ export type AuditAction =
   | 'asset_pack_rejected'
   | 'agent_key_created'
   | 'agent_key_revoked'
+  | 'agent_connection_created'
+  | 'agent_connection_revoked'
   | 'agent_mcp_search';
 
 export type AuditEvent = {

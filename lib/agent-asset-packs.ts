@@ -96,12 +96,12 @@ async function getCloudNameForManifest(orgId: string) {
 export async function createAgentAssetPackDraft({
   orgId,
   actorId,
-  agentKeyId,
+  agentIdentity,
   payload,
 }: {
   orgId: string;
   actorId: string;
-  agentKeyId: string;
+  agentIdentity: string;
   payload: CreateAgentAssetPackRequest;
 }) {
   const brief = cleanText(payload.brief, 2_000);
@@ -182,7 +182,7 @@ export async function createAgentAssetPackDraft({
           assetCount: pack.assets.length,
           channels: pack.channels,
           via: 'agent_mcp',
-          agentKeyId,
+          agentIdentity,
         },
       });
     } catch (auditError) {
@@ -242,12 +242,12 @@ export async function getApprovedAssetPack(orgId: string, id: string) {
 export async function approveAgentAssetPack({
   orgId,
   actorId,
-  agentKeyId,
+  agentIdentity,
   id,
 }: {
   orgId: string;
   actorId: string;
-  agentKeyId: string;
+  agentIdentity: string;
   id: string;
 }) {
   try {
@@ -292,7 +292,7 @@ export async function approveAgentAssetPack({
           title: pack.title,
           assetCount: pack.assets.length,
           via: 'agent_mcp',
-          agentKeyId,
+          agentIdentity,
         },
       });
     } catch (auditError) {

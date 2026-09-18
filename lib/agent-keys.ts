@@ -26,6 +26,9 @@ export type AgentPrincipal = {
   orgId: string;
   name: string;
   scopes: AgentScope[];
+  actorId: string;
+  authType: 'api_key' | 'oauth';
+  connectionId?: string;
 };
 
 function hashAgentKey(token: string) {
@@ -134,6 +137,8 @@ export async function authenticateAgentApiKey(request: Request): Promise<AgentPr
     orgId: data.org_id,
     name: data.name,
     scopes: normalizeAgentScopes(data.scopes),
+    actorId: `agent:${data.id}`,
+    authType: 'api_key',
   };
   if (principal.scopes.length === 0) return null;
 
