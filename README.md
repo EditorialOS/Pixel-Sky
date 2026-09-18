@@ -229,7 +229,7 @@ remains the media source of truth; PixelSky owns the agent-facing manifest and a
 ## Chat App Connections (No Key)
 
 PixelSky can expose one revocable, OAuth-protected MCP endpoint per workspace. This is
-the path for non-technical users connecting Claude or another remote MCP client:
+the path for non-technical users connecting ChatGPT or another remote MCP client:
 
 1. A workspace admin opens `/settings/agents`, creates a chat connection, and chooses its permissions.
 2. They paste the generated endpoint into the chat client's custom connector setting.
@@ -247,7 +247,7 @@ Run `supabase/migrations/202609170003_agent_mcp_connections.sql`, expose
 
 In Clerk's **OAuth applications** settings:
 
-1. Enable **Publish DCR support** for Claude and ChatGPT custom connectors.
+1. Enable **Publish DCR support** for ChatGPT custom apps and other DCR-compatible clients.
 2. Set default scopes to `profile email offline_access` so a client that omits a scope still receives a renewable login. Clerk includes the OpenID scope in its OAuth flow.
 3. Require PKCE and keep the OAuth consent screen enabled.
 4. Set `PIXELSKY_OAUTH_ISSUER` in Vercel to the Clerk Frontend API origin, for example `https://your-instance.clerk.accounts.dev`.

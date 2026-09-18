@@ -34,7 +34,7 @@ function endpointFor(connection: AgentConnectionRecord) {
 
 export default function AgentSettingsPage() {
   const [connections, setConnections] = useState<AgentConnectionRecord[]>([]);
-  const [connectionName, setConnectionName] = useState('Claude for our team');
+  const [connectionName, setConnectionName] = useState('PixelSky for ChatGPT');
   const [connectionScopes, setConnectionScopes] = useState<AgentScope[]>([...DEFAULT_AGENT_SCOPES]);
   const [connectionEndpoint, setConnectionEndpoint] = useState<string | null>(null);
   const [oauthReady, setOauthReady] = useState(false);
@@ -208,9 +208,9 @@ export default function AgentSettingsPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-os-accent">No developer key</p>
-              <h2 className="mt-2 text-xl font-semibold">Use PixelSky inside Claude</h2>
+              <h2 className="mt-2 text-xl font-semibold">Use PixelSky inside ChatGPT</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-os-muted">
-                Create one connection for this workspace, paste its endpoint into Claude once, then each teammate signs in with their own PixelSky account. No API key is copied or shared.
+                Create one connection for this workspace, paste its endpoint into a ChatGPT custom app once, then each teammate signs in with their own PixelSky account. No API key is copied or shared.
               </p>
             </div>
             <span className={`inline-flex shrink-0 items-center rounded-full border px-3 py-1 text-xs font-medium ${oauthReady ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
@@ -220,7 +220,7 @@ export default function AgentSettingsPage() {
 
           <ol className="mt-6 grid gap-3 text-sm text-os-muted md:grid-cols-3">
             <li className="rounded-2xl border border-black/5 bg-os-surface p-4"><span className="font-semibold text-os-text">1. Create</span><br />Choose what the chat connection can do.</li>
-            <li className="rounded-2xl border border-black/5 bg-os-surface p-4"><span className="font-semibold text-os-text">2. Paste</span><br />In Claude, add a custom connector and paste the endpoint.</li>
+            <li className="rounded-2xl border border-black/5 bg-os-surface p-4"><span className="font-semibold text-os-text">2. Add to ChatGPT</span><br />Enable Developer Mode, create a custom app, and paste the endpoint.</li>
             <li className="rounded-2xl border border-black/5 bg-os-surface p-4"><span className="font-semibold text-os-text">3. Sign in</span><br />Each team member authorizes their own PixelSky access.</li>
           </ol>
 
@@ -268,7 +268,7 @@ export default function AgentSettingsPage() {
 
           {connectionEndpoint && (
             <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <p className="text-sm font-semibold text-emerald-900">Paste this into Claude&apos;s custom connector field</p>
+              <p className="text-sm font-semibold text-emerald-900">Paste this into ChatGPT&apos;s custom app endpoint field</p>
               <div className="mt-3 flex flex-col gap-3 sm:flex-row">
                 <code className="min-w-0 flex-1 overflow-x-auto rounded-xl border border-emerald-200 bg-white px-3 py-3 text-xs text-emerald-950">{connectionEndpoint}</code>
                 <button type="button" onClick={() => void copy(connectionEndpoint)} className="rounded-xl border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-100">Copy endpoint</button>
