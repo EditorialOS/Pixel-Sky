@@ -44,7 +44,7 @@ export type DamAsset = {
   ai_tag_confidence?: Record<string, number>;
 };
 
-const DEFAULT_LIMIT = 48;
+const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 const MAX_FETCH = 100; // PixelSky (Light DAM) targets small libraries (20-50 assets)
 
@@ -298,7 +298,7 @@ export async function searchDamAssets(
 ): Promise<DamSearchResult> {
   const query = typeof input.query === 'string' ? input.query.slice(0, 500) : '';
   const cursor = typeof input.cursor === 'string' ? input.cursor.slice(0, 1_000) : undefined;
-  const mode: SearchMode = input.mode === 'semantic' ? 'semantic' : 'strict';
+  const mode: SearchMode = input.mode === 'semantic' && query.trim() ? 'semantic' : 'strict';
   const isSemantic = mode === 'semantic';
   const limit = normalizeLimit(input.limit);
 
