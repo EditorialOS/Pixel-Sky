@@ -1,4 +1,8 @@
-import { chatGptClientRegistration, isMcpOAuthConfigured } from '@/lib/mcp-oauth';
+import {
+  chatGptClientRegistration,
+  isChatGptRedirectUri,
+  isMcpOAuthConfigured,
+} from '@/lib/mcp-oauth';
 
 export const runtime = 'nodejs';
 
@@ -30,9 +34,10 @@ export async function POST(request: Request) {
   }
 
   const redirectUris = Array.isArray(payload.redirect_uris) ? payload.redirect_uris : [];
-  if (redirectUris.length !== 1 || redirectUris[0] !== 'https://chatgpt.com/connector_platform_oauth_redirect') {
+  const redirectUri = typeof redirectUris[0] === 'string' ? redirectUris[0] : '';
+  if (redirectUris.length !== 1 || !isChatGptRedirectUri(redirectUri)) {
     return response({ error: 'invalid_redirect_uri', error_description: 'PixelSky currently accepts ChatGPT custom-app callbacks only.' }, 400);
   }
 
-  return response(chatGptClientRegistration(), 201);
+  return response(chatGptClientRegistration(redirectUri), 201);
 }

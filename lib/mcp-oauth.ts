@@ -4,7 +4,6 @@ import { type AgentConnectionRecord } from '@/lib/agent-connections';
 import { type AgentPrincipal } from '@/lib/agent-keys';
 
 const CHATGPT_CLIENT_ID = 'pixelsky-chatgpt';
-const CHATGPT_REDIRECT_URI = 'https://chatgpt.com/connector_platform_oauth_redirect';
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const REFRESH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
 
@@ -76,17 +75,26 @@ export function getMcpOAuthIssuer(request: Request) {
   return new URL(request.url).origin;
 }
 
-export function isChatGptClient(clientId: string, redirectUri: string) {
-  return clientId === CHATGPT_CLIENT_ID && redirectUri === CHATGPT_REDIRECT_URI;
+export function isChatGptRedirectUri(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.hostname === 'chatgpt.com';
+  } catch {
+    return false;
+  }
 }
 
-export function chatGptClientRegistration() {
+export function isChatGptClient(clientId: string, redirectUri: string) {
+  return clientId === CHATGPT_CLIENT_ID && isChatGptRedirectUri(redirectUri);
+}
+
+export function chatGptClientRegistration(redirectUri: string) {
   return {
     client_id: CHATGPT_CLIENT_ID,
     client_id_issued_at: Math.floor(Date.now() / 1000),
     client_name: 'ChatGPT',
     grant_types: ['authorization_code', 'refresh_token'],
-    redirect_uris: [CHATGPT_REDIRECT_URI],
+    redirect_uris: [redirectUri],
     response_types: ['code'],
     token_endpoint_auth_method: 'none',
   };
