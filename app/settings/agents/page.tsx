@@ -212,6 +212,9 @@ export default function AgentSettingsPage() {
               <p className="mt-2 max-w-2xl text-sm leading-6 text-os-muted">
                 Create one connection for this workspace, paste its endpoint into a ChatGPT custom app once, then each teammate signs in with their own PixelSky account. No API key is copied or shared.
               </p>
+              <p className="mt-2 max-w-2xl text-xs leading-5 text-os-muted">
+                Full pack and approval actions require a ChatGPT Business, Enterprise, or Edu workspace with Developer Mode enabled. ChatGPT Pro can use read and search access only.
+              </p>
             </div>
             <span className={`inline-flex shrink-0 items-center rounded-full border px-3 py-1 text-xs font-medium ${oauthReady ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
               {oauthReady ? 'OAuth ready' : 'OAuth setup pending'}
