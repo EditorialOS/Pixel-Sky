@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assetIsInWorkspaceFolder } from '../lib/cloudinary';
+import { assertReadableCloudinaryAssets, assetIsInWorkspaceFolder } from '../lib/cloudinary';
 import { buildTagExpression, rankStrictAssets } from '../lib/dam-search';
 import { agentCandidate, agentDraftPack } from '../lib/agent-output';
 import { assertApprovalActive, assertApprovedVersion, AssetUseError } from '../lib/asset-use-requests';
@@ -32,6 +32,15 @@ test('folder scoping includes children in both Cloudinary folder modes', () => {
   assert.equal(assetIsInWorkspaceFolder({ public_id: 'approved/old-id', asset_folder: 'archive' }, 'approved'), false);
   assert.equal(assetIsInWorkspaceFolder({ public_id: 'approved/travel/image', folder: 'approved/travel' }, 'approved'), true);
   assert.equal(assetIsInWorkspaceFolder({ public_id: 'elsewhere/image', folder: 'elsewhere' }, 'approved'), false);
+});
+
+test('Cloudinary asset visibility failures are not reported as an empty library', () => {
+  assert.doesNotThrow(() => assertReadableCloudinaryAssets(0, 0));
+  assert.doesNotThrow(() => assertReadableCloudinaryAssets(15, 15));
+  assert.throws(
+    () => assertReadableCloudinaryAssets(15, 0),
+    /API key cannot read their details/,
+  );
 });
 
 test('agent candidate and draft outputs omit delivery URLs', () => {

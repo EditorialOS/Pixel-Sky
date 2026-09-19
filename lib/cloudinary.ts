@@ -64,6 +64,9 @@ export function cloudinaryErrorMessage(error: unknown) {
   if (normalized.includes('invalid api key') || normalized.includes('invalid signature')) {
     return 'Cloudinary rejected the API key or API secret. Copy both values again from the same Cloudinary product environment.';
   }
+  if (normalized.includes('cannot read their details')) {
+    return message;
+  }
   return 'Cloudinary could not verify this connection. Check the cloud name, API key, and API secret.';
 }
 
@@ -133,6 +136,7 @@ export async function scanImageAssets(
 ) {
   const resources: any[] = [];
   let cursor: string | undefined;
+  let reportedTotal = 0;
   do {
     const query = cloudinary.search
       .expression(expression)
@@ -147,13 +151,23 @@ export async function scanImageAssets(
       api_key: settings.apiKey,
       api_secret: settings.apiSecret,
     });
+    reportedTotal = Math.max(reportedTotal, Number(page.total_count ?? 0));
     resources.push(...(page.resources ?? []));
     cursor = page.next_cursor ?? undefined;
     if (cursor && resources.length >= maxAssets) {
       throw new Error(`The connected Cloudinary library exceeds the ${maxAssets}-asset search limit. Narrow the workspace folder or contact support.`);
     }
   } while (cursor);
+  assertReadableCloudinaryAssets(reportedTotal, resources.length);
   return resources;
+}
+
+export function assertReadableCloudinaryAssets(reportedTotal: number, returnedAssets: number) {
+  if (reportedTotal > 0 && returnedAssets === 0) {
+    throw new Error(
+      `Cloudinary reports ${reportedTotal} active assets, but this API key cannot read their details. Use a Cloudinary API key with Resources/Admin API read access.`,
+    );
+  }
 }
 
 export async function getAssetCount(settings: CloudinarySettings, maxResults: number) {

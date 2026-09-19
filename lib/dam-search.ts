@@ -339,7 +339,9 @@ export async function searchDamAssets(
     allResources = await scanImageAssets(settings);
   } catch (error) {
     logCloudinaryError('Cloudinary asset search failed', error);
-    const message = error instanceof Error && error.message.includes('search limit')
+    const message = error instanceof Error && (
+      error.message.includes('search limit') || error.message.includes('cannot read their details')
+    )
       ? error.message
       : cloudinaryErrorMessage(error);
     throw new DamSearchError(message, 400);
