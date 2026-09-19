@@ -57,14 +57,18 @@ function createServer(principal: AgentPrincipal) {
           : 'Search this workspace\'s connected Cloudinary image library. Results include previews and download links.',
         inputSchema: z.object({
           query: z.string().max(500).describe('Natural-language asset query.'),
-          mode: z.enum(['strict', 'semantic']).optional().describe('Use semantic when the workspace has an AI index; strict is the reliable metadata search fallback.'),
+          mode: z.enum(['strict', 'semantic']).optional().describe('Use semantic for visual and metadata search; strict is the exact metadata search fallback.'),
           limit: z.number().int().min(1).max(100).optional().describe('Maximum number of assets to return.'),
         }),
         annotations: { readOnlyHint: true },
       },
       async ({ query, mode, limit }) => {
         try {
-          const result = await searchDamAssets(principal.orgId, { query, mode, limit });
+          const result = await searchDamAssets(principal.orgId, {
+            query,
+            mode: mode ?? 'semantic',
+            limit,
+          });
           if (query.trim()) {
             try {
               await logAuditEvent({

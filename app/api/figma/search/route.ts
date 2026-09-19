@@ -12,10 +12,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Connect PixelSky in Figma again.' }, { status: 401, headers: figmaCors });
     }
     const result = await searchDamAssets(principal.orgId, {
-      query: request.nextUrl.searchParams.get('q') ?? '', mode: 'strict', limit: 30,
+      query: request.nextUrl.searchParams.get('q') ?? '', mode: 'semantic', limit: 30,
     });
     return NextResponse.json({
-      assets: result.assets.map(({ public_id, filename, preview_url, tags, context, metadata }) => ({ public_id, filename, preview_url, tags, context, metadata })),
+      assets: result.assets.map(({ public_id, filename, preview_url, tags, context, metadata, visual_description, visual_tags }) => ({
+        public_id,
+        filename,
+        preview_url,
+        tags,
+        context,
+        metadata,
+        visual_description,
+        visual_tags,
+      })),
       total: result.total,
       outside_scope_matches: result.outside_scope_matches,
     }, { headers: figmaCors });

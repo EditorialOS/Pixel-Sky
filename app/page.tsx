@@ -23,6 +23,9 @@ type DamAsset = {
   preview_url: string;
   download_url: string;
   ai_tag_confidence?: Record<string, number>;
+  visual_description?: string;
+  visual_tags?: string[];
+  match_score?: number;
 };
 
 type DamSearchResponse = {
@@ -695,10 +698,10 @@ export default function LightDamPage() {
 
         {results.ai_fallback && (
           <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-700 shadow-sm">
-            AI search index is not ready yet. Showing keyword results instead.
+            Visual search index is not ready yet. Showing keyword results instead.
             <div className="mt-2">
               <a href="/settings/cloudinary" className="text-xs font-semibold underline">
-                Build AI index
+                Build visual index
               </a>
             </div>
           </div>
@@ -747,7 +750,7 @@ export default function LightDamPage() {
                   <div className="aspect-square w-full overflow-hidden bg-os-bg">
                     <img
                       src={asset.preview_url}
-                      alt={description || asset.filename}
+                      alt={asset.visual_description || description || asset.filename}
                       className="h-full w-full object-cover"
                       loading="lazy"
                     />
@@ -764,6 +767,12 @@ export default function LightDamPage() {
                         </span>
                       )}
                     </div>
+
+                    {asset.visual_description && (
+                      <p className="text-sm leading-relaxed text-os-muted">
+                        {asset.visual_description}
+                      </p>
+                    )}
 
                     <div className="grid grid-cols-2 gap-2 text-xs text-os-muted">
                       <div>

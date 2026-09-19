@@ -21,6 +21,7 @@ export type DamSearchRequest = {
 
 type MatchRow = {
   public_id: string;
+  similarity?: number;
 };
 
 export type DamAsset = {
@@ -45,6 +46,9 @@ export type DamAsset = {
   download_url: string;
   agent_download_url: string;
   ai_tag_confidence?: Record<string, number>;
+  visual_description?: string;
+  visual_tags?: string[];
+  match_score?: number;
 };
 
 const DEFAULT_LIMIT = 50;
@@ -346,6 +350,7 @@ export async function searchDamAssets(
     : 0;
   let filtered: any[] = [];
   let aiFallback = false;
+  const semanticScores = new Map<string, number>();
 
   if (isSemantic && query.trim().length > 0) {
     try {
@@ -362,7 +367,11 @@ export async function searchDamAssets(
         throw error;
       }
 
-      const publicIds = (data ?? []).map((row: MatchRow) => row.public_id);
+      const matches = (data ?? []) as MatchRow[];
+      matches.forEach((row) => {
+        if (typeof row.similarity === 'number') semanticScores.set(row.public_id, row.similarity);
+      });
+      const publicIds = matches.map((row) => row.public_id);
       if (publicIds.length > 0) {
         const semanticResources = await getAssetsByIds(publicIds, settings);
         const resourceMap = new Map(semanticResources.map((asset: any) => [asset.public_id, asset]));
@@ -400,7 +409,35 @@ export async function searchDamAssets(
     }
   }
 
-  const assets = filtered.slice(0, limit).map((asset) => mapAsset(asset, settings.cloudName));
+  let assets = filtered.slice(0, limit).map((asset) => mapAsset(asset, settings.cloudName));
+  const resultIds = assets.map((asset) => asset.public_id);
+  if (resultIds.length > 0) {
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from('asset_embeddings')
+        .select('public_id, visual_description, visual_tags')
+        .eq('org_id', orgId)
+        .in('public_id', resultIds);
+      if (error) throw error;
+      const descriptions = new Map((data ?? []).map((row: any) => [row.public_id, row]));
+      assets = assets.map((asset) => {
+        const enrichment = descriptions.get(asset.public_id);
+        return {
+          ...asset,
+          visual_description: enrichment?.visual_description ?? undefined,
+          visual_tags: enrichment?.visual_tags ?? undefined,
+          match_score: semanticScores.get(asset.public_id),
+        };
+      });
+    } catch (error) {
+      console.error('Visual search enrichment error:', error);
+      assets = assets.map((asset) => ({
+        ...asset,
+        match_score: semanticScores.get(asset.public_id),
+      }));
+    }
+  }
 
   return {
     query,

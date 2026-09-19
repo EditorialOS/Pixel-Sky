@@ -4,6 +4,8 @@ import { assetIsInWorkspaceFolder } from '../lib/cloudinary';
 import { buildTagExpression, rankStrictAssets } from '../lib/dam-search';
 import { agentCandidate, agentDraftPack } from '../lib/agent-output';
 import { assertApprovalActive, assertApprovedVersion, AssetUseError } from '../lib/asset-use-requests';
+import { parseAssetVisualDescription, visualDescriptionTerms } from '../lib/asset-description';
+import { buildEmbeddingText } from '../lib/embeddings';
 
 test('strict search finds an older Cloudinary asset by its travel tag', () => {
   assert.equal(buildTagExpression('Travel'), 'resource_type:image AND type:upload AND (tags:travel)');
@@ -56,4 +58,27 @@ test('agent candidate and draft outputs omit delivery URLs', () => {
     }],
   });
   assert.deepEqual(draft.assets[0], { public_id: 'travel/one', preview_url: 'https://preview.example' });
+});
+
+test('visual descriptions become searchable embedding content', () => {
+  const description = parseAssetVisualDescription(JSON.stringify({
+    description: 'A cyclist rides along a coastal road at golden hour.',
+    subjects: ['cyclist'],
+    setting: ['coastal road'],
+    mood: ['adventurous'],
+    colors: ['golden'],
+    visual_tags: ['travel', 'outdoors'],
+    visible_text: [],
+  }));
+  const content = buildEmbeddingText({
+    public_id: 'campaign/ride',
+    filename: 'IMG_1024.jpg',
+    tags: ['launch'],
+    visual_description: description.description,
+    visual_tags: visualDescriptionTerms(description),
+  });
+
+  assert.match(content, /cyclist rides along a coastal road/i);
+  assert.match(content, /adventurous/);
+  assert.match(content, /travel/);
 });

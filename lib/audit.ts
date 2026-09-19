@@ -8,6 +8,7 @@ export type AuditAction =
   | 'settings_updated'
   | 'ai_search'
   | 'ai_index'
+  | 'visual_index'
   | 'variant_generated'
   | 'asset_pack_created'
   | 'asset_pack_approved'

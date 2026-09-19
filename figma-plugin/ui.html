@@ -40,7 +40,7 @@
     <p id="message" class="message hidden" role="status"></p>
     <div id="connect"><p class="muted">Connect your PixelSky workspace to start searching.</p><button class="primary section" id="connectButton">Connect PixelSky</button></div>
     <div id="workspace" class="hidden">
-      <div class="row"><input id="query" class="grow" placeholder="Search tags, campaigns, image number" /><button class="primary" id="searchButton">Search</button></div>
+      <div class="row"><input id="query" class="grow" placeholder="Try: warm coastal travel at sunset" /><button class="primary" id="searchButton">Search</button></div>
       <div id="results" class="section"></div>
       <div id="requestForm" class="section hidden"><hr class="divider" /><h2 id="selectedTitle">Request image use</h2><form id="useForm"><label>Channel<input name="channel" required placeholder="Website, email, social, Figma design" /></label><label>Campaign<input name="campaign" required /></label><label>Placement<input name="placement" required placeholder="Hero, card, header, story" /></label><label>Region<input name="region" required placeholder="US or global" /></label><label>Purpose<input name="purpose" required placeholder="What is this image for?" /></label><button class="primary" type="submit">Request approval</button></form></div>
       <div class="section"><hr class="divider" /><div class="row"><h2 class="grow">Use requests</h2><button class="small" id="refreshButton">Refresh</button></div><p class="muted">Approved images can be placed into a selected shape or as a new rectangle.</p><div id="requests"></div></div>
@@ -68,8 +68,8 @@
         const img = document.createElement('img'); img.src = asset.preview_url; img.alt = asset.filename;
         const info = document.createElement('div'); info.className = 'grow';
         const name = document.createElement('strong'); name.className = 'break'; name.textContent = asset.filename;
-        const tags = document.createElement('p'); tags.className = 'muted'; tags.textContent = (asset.tags || []).slice(0, 4).join(', ');
-        info.append(name, tags);
+        const description = document.createElement('p'); description.className = 'muted'; description.textContent = asset.visual_description || (asset.tags || []).slice(0, 4).join(', ');
+        info.append(name, description);
         const button = document.createElement('button'); button.className = 'small'; button.textContent = 'Request';
         button.onclick = () => { selected = asset; $('selectedTitle').textContent = `Request use: ${asset.filename}`; $('requestForm').classList.remove('hidden'); $('requestForm').scrollIntoView({ behavior: 'smooth' }); };
         card.append(img, info, button); root.append(card);

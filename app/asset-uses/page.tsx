@@ -26,7 +26,13 @@ type UseRequest = {
   expires_at: string | null;
 };
 
-type Candidate = { public_id: string; filename: string; preview_url: string; tags: string[] };
+type Candidate = {
+  public_id: string;
+  filename: string;
+  preview_url: string;
+  tags: string[];
+  visual_description?: string;
+};
 
 const emptyForm = { channel: '', campaign: '', placement: '', region: '', purpose: '' };
 
@@ -61,7 +67,7 @@ export default function AssetUsesPage() {
     try {
       const response = await fetch('/api/dam/search', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, mode: 'strict', limit: 24 }),
+        body: JSON.stringify({ query, mode: 'semantic', limit: 24 }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Search failed.');
@@ -138,9 +144,9 @@ export default function AssetUsesPage() {
     <main className="mx-auto grid max-w-6xl gap-8 px-6 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(360px,1fr)]">
       <section className="rounded-3xl border border-black/10 bg-white p-6">
         <p className="text-xs uppercase tracking-[0.2em] text-os-muted">Request</p><h2 className="mt-2 text-2xl font-semibold">Find a candidate</h2>
-        <form onSubmit={search} className="mt-5 flex gap-2"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try travel, a campaign, or an asset ID" className="min-w-0 flex-1 rounded-xl border border-black/15 px-3 py-2 text-sm" /><button disabled={loading} className="rounded-xl bg-os-accent px-4 py-2 text-sm font-semibold text-white">Search</button></form>
+        <form onSubmit={search} className="mt-5 flex gap-2"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try: warm coastal travel at sunset" className="min-w-0 flex-1 rounded-xl border border-black/15 px-3 py-2 text-sm" /><button disabled={loading} className="rounded-xl bg-os-accent px-4 py-2 text-sm font-semibold text-white">Search</button></form>
         <div className="mt-4 grid max-h-72 grid-cols-2 gap-3 overflow-auto sm:grid-cols-3">
-          {candidates.map((candidate) => <button key={candidate.public_id} type="button" onClick={() => setSelected(candidate)} className={`overflow-hidden rounded-xl border text-left ${selected?.public_id === candidate.public_id ? 'border-os-accent' : 'border-black/10'}`}><img src={candidate.preview_url} alt={candidate.filename} className="aspect-square w-full object-cover" /><span className="block truncate p-2 text-xs">{candidate.filename}</span></button>)}
+          {candidates.map((candidate) => <button key={candidate.public_id} type="button" title={candidate.visual_description} onClick={() => setSelected(candidate)} className={`overflow-hidden rounded-xl border text-left ${selected?.public_id === candidate.public_id ? 'border-os-accent' : 'border-black/10'}`}><img src={candidate.preview_url} alt={candidate.visual_description || candidate.filename} className="aspect-square w-full object-cover" /><span className="block truncate p-2 text-xs">{candidate.filename}</span></button>)}
         </div>
         {selected && <form onSubmit={create} className="mt-6 grid gap-3"><h3 className="font-semibold">Request use of {selected.filename}</h3>{(Object.keys(form) as (keyof typeof form)[]).map((field) => <label key={field} className="grid gap-1 text-xs font-medium capitalize">{field}<input required maxLength={field === 'purpose' ? 1000 : 140} value={form[field]} onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))} placeholder={field === 'region' ? 'US, EU, or global' : undefined} className="rounded-xl border border-black/15 px-3 py-2 text-sm font-normal" /></label>)}<button disabled={busyId === 'create'} className="mt-2 rounded-xl bg-os-accent px-4 py-3 text-sm font-semibold text-white">Send for approval</button></form>}
       </section>

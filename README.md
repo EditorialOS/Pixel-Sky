@@ -56,6 +56,7 @@ Create a `.env.local` file or configure these in Vercel:
 | `NEXT_PUBLIC_APP_URL` | Public app URL | Optional |
 | `OPENAI_API_KEY` | OpenAI API key | Yes (AI magic) |
 | `OPENAI_EMBEDDING_MODEL` | Embedding model | No (default text-embedding-3-small) |
+| `OPENAI_VISION_MODEL` | Image-description model | No (default gpt-4o-mini) |
 
 ## Authentication (Milestone 1)
 
@@ -141,43 +142,16 @@ create table if not exists waitlist_signups (
 
 > Note: credentials are stored in Supabase and accessed via the service role key.
 
-## AI search (Milestone 6)
+## Visual search
 
-Enable the vector extension and create the embeddings table:
+Run `supabase/migrations/202609170000_initial_schema.sql`, followed by
+`supabase/migrations/202609190001_visual_asset_index.sql`. PixelSky uses a vision
+model to create a factual description of each Cloudinary image, combines it with
+the asset's existing metadata, and stores the resulting embedding in Supabase.
 
-```sql
-create extension if not exists vector;
-
-create table if not exists asset_embeddings (
-  org_id text not null,
-  public_id text not null,
-  content text,
-  embedding vector(1536),
-  updated_at timestamptz default now(),
-  primary key (org_id, public_id)
-);
-
-create index if not exists asset_embeddings_org_id_idx on asset_embeddings (org_id);
-create index if not exists asset_embeddings_embedding_idx on asset_embeddings using ivfflat (embedding vector_cosine_ops);
-
-create or replace function match_asset_embeddings(
-  query_embedding vector(1536),
-  match_count int,
-  org_id text
-)
-returns table(public_id text, similarity float)
-language sql stable
-as $$
-  select public_id,
-         1 - (embedding <=> query_embedding) as similarity
-  from asset_embeddings
-  where asset_embeddings.org_id = match_asset_embeddings.org_id
-  order by embedding <=> query_embedding
-  limit match_count;
-$$;
-```
-
-Visit `/settings/cloudinary` and click **Build AI index** to embed existing assets.
+Visit `/settings/cloudinary` and click **Index library**. Indexing runs in small,
+retryable batches and skips assets whose Cloudinary ID and version are already
+current.
 
 Create an `organization_billing` table for Stripe:
 
@@ -303,7 +277,7 @@ curl -X POST \
 - Search by image number: `image #1234`
 - Search by photographer: `photographer Alex`
 - Search by campaign name or tag: `spring launch`
-- Toggle **AI search** for broader semantic matches (uses tags + metadata)
+- Toggle **AI search** for natural-language matching across visible image content, tags, and metadata
 
 > Note: AI auto-tagging requires the Cloudinary Auto-Tagging add-on.
 
@@ -326,9 +300,9 @@ This repo can be imported into Replit directly from GitHub.
 Use this checklist before selling publicly:
 
 1. Set production auth keys in Vercel (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`) and verify they are not Clerk dev/test keys.
-2. Run Supabase migrations for `organization_cloudinary`, `audit_logs`, `asset_packs`, `asset_embeddings`, `organization_billing`, `waitlist_signups`, `agent_api_keys`, and `agent_mcp_connections`; expose the required tables and `match_asset_embeddings` through Supabase Data API with RLS enabled.
+2. Run every migration in `supabase/migrations`, including the asset-use workflow and visual index; expose `match_asset_embeddings` through Supabase Data API.
 3. Configure Stripe live mode keys, create live prices, and register `/api/stripe/webhook`.
-4. Connect a Cloudinary account, upload test assets, and run **Build AI index** in `/settings/cloudinary`.
+4. Connect a Cloudinary account and run **Index library** in `/settings/cloudinary`.
 5. Verify these flows end-to-end:
    - sign up/sign in
    - semantic search and strict search

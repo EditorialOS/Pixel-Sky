@@ -108,6 +108,22 @@ export function assetIsInWorkspaceFolder(
   return actual === scope || actual.startsWith(`${scope}/`);
 }
 
+export function buildAssetAnalysisUrl(publicId: string, cloudName: string) {
+  return cloudinary.url(publicId, {
+    cloud_name: cloudName,
+    secure: true,
+    resource_type: 'image',
+    type: 'upload',
+    transformation: [{
+      width: 1_600,
+      height: 1_600,
+      crop: 'limit',
+      quality: 'auto:good',
+      fetch_format: 'jpg',
+    }],
+  });
+}
+
 // Search without a folder expression: Cloudinary's folder and asset_folder fields
 // differ between fixed-folder and dynamic-folder accounts.
 export async function scanImageAssets(

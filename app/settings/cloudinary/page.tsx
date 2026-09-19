@@ -28,7 +28,6 @@ export default function CloudinarySettingsPage() {
   const [message, setMessage] = useState('');
   const [indexStatus, setIndexStatus] = useState<'idle' | 'running' | 'error'>('idle');
   const [indexMessage, setIndexMessage] = useState('');
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -100,26 +99,38 @@ export default function CloudinarySettingsPage() {
 
   const runIndex = async () => {
     setIndexStatus('running');
-    setIndexMessage('');
+    setIndexMessage('Preparing your Cloudinary library...');
     try {
-      const response = await fetch('/api/ai/index', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cursor: nextCursor || undefined }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setIndexStatus('error');
-        setIndexMessage(data.error || 'Unable to build AI index.');
-        return;
+      let shouldContinue = true;
+      while (shouldContinue) {
+        const response = await fetch('/api/ai/index', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          setIndexStatus('error');
+          setIndexMessage(data.error || 'Unable to build the visual index.');
+          return;
+        }
+        const total = Number(data.total ?? 0);
+        const complete = Math.min(Number(data.complete ?? 0), total);
+        const failed = Number(data.failed_total ?? 0);
+        setIndexMessage(
+          data.remaining > 0
+            ? `Described and indexed ${complete} of ${total} assets. Keep this page open.`
+            : failed > 0
+              ? `Indexed ${complete} of ${total} assets. ${failed} could not be processed after three attempts.`
+              : `Visual index ready: ${complete} of ${total} assets.`,
+        );
+        shouldContinue = Number(data.remaining ?? 0) > 0;
       }
-      setNextCursor(data.next_cursor ?? null);
       setIndexStatus('idle');
-      setIndexMessage(`Indexed ${data.indexed || 0} assets.`);
     } catch (error) {
       console.error('Indexing failed:', error);
       setIndexStatus('error');
-      setIndexMessage('Unable to build AI index.');
+      setIndexMessage('Unable to build the visual index.');
     }
   };
 
@@ -164,7 +175,7 @@ export default function CloudinarySettingsPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 grid gap-4">
-            {!canManage && <p className="text-sm text-os-muted">Only workspace admins can change the Cloudinary connection or build the AI index.</p>}
+            {!canManage && <p className="text-sm text-os-muted">Only workspace admins can change the Cloudinary connection or build the visual index.</p>}
             <div className="grid gap-4 md:grid-cols-2">
               <label className="grid gap-2 text-xs text-os-muted">
                 <span className="uppercase tracking-wide">Cloud name</span>
@@ -253,9 +264,9 @@ export default function CloudinarySettingsPage() {
         <div className="mt-6 rounded-3xl border border-black/10 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-xl font-semibold">AI search index</h2>
+              <h2 className="text-xl font-semibold">Visual search index</h2>
               <p className="text-sm text-os-muted">
-                Build semantic search for your workspace assets.
+                PixelSky describes each image and combines that description with your existing Cloudinary metadata for natural-language search.
               </p>
             </div>
             <button
@@ -264,20 +275,11 @@ export default function CloudinarySettingsPage() {
               disabled={!canManage || indexStatus === 'running'}
               className="h-11 rounded-xl bg-os-accent px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-black/20"
             >
-              {indexStatus === 'running' ? 'Indexing...' : 'Build AI index'}
+              {indexStatus === 'running' ? 'Describing images...' : 'Index library'}
             </button>
           </div>
           {indexMessage && (
             <p className="mt-3 text-xs text-os-muted">{indexMessage}</p>
-          )}
-          {nextCursor && (
-            <button
-              type="button"
-              onClick={runIndex}
-              className="mt-3 text-xs font-semibold text-os-text underline"
-            >
-              Continue indexing
-            </button>
           )}
         </div>
       </main>
