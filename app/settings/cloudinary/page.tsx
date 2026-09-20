@@ -224,7 +224,7 @@ export default function CloudinarySettingsPage() {
             </div>
 
             <p className="text-xs text-os-muted">
-              For security, you must re-enter the API key and secret when updating the connection.
+              For security, you must re-enter the API key and secret when updating the connection. The key must include Resources/Admin API read access.
             </p>
 
             <div className="flex flex-wrap items-center gap-3">

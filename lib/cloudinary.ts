@@ -82,10 +82,33 @@ export async function verifyCloudinarySettings(settings: CloudinarySettings) {
       api_secret: settings.apiSecret,
       cloud_name: settings.cloudName,
     });
+    await verifyCloudinaryAssetReadAccess(settings);
     return null;
   } catch (error) {
     return cloudinaryErrorMessage(error);
   }
+}
+
+async function verifyCloudinaryAssetReadAccess(settings: CloudinarySettings) {
+  let cursor: string | undefined;
+  let reportedTotal = 0;
+  let returnedAssets = 0;
+  for (let pageNumber = 0; pageNumber < 3; pageNumber += 1) {
+    const query = cloudinary.search
+      .expression('resource_type:image AND type:upload')
+      .max_results(1);
+    if (cursor) query.next_cursor(cursor);
+    const page = await (query as any).execute({
+      cloud_name: settings.cloudName,
+      api_key: settings.apiKey,
+      api_secret: settings.apiSecret,
+    });
+    reportedTotal = Math.max(reportedTotal, Number(page.total_count ?? 0));
+    returnedAssets += page.resources?.length ?? 0;
+    cursor = page.next_cursor ?? undefined;
+    if (returnedAssets > 0 || !cursor) break;
+  }
+  assertReadableCloudinaryAssets(reportedTotal, returnedAssets);
 }
 
 function escapeExpressionValue(value: string) {
