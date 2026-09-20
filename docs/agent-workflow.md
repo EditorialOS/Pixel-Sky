@@ -15,7 +15,7 @@ The Figma plugin uses the same request and approval records. It can fill the sel
 
 ## Live setup
 
-1. Apply `supabase/migrations/202609180001_asset_use_requests.sql` and `supabase/migrations/202609190001_visual_asset_index.sql` to the PixelSky Supabase project before deploying routes that use them.
+1. Apply `supabase/migrations/202609180001_asset_use_requests.sql`, `supabase/migrations/202609190001_visual_asset_index.sql`, and `supabase/migrations/202609190002_service_role_grants.sql` to the PixelSky Supabase project before deploying routes that use them.
 2. Deploy the Next.js app with the existing Clerk, Supabase, and Cloudinary configuration. Set `PIXELSKY_ASSET_USES_ENABLED=true` and `NEXT_PUBLIC_PIXELSKY_ASSET_USES_ENABLED=true` only after the migration and a smoke test. Without those flags, the new workflow stays hidden while the search fix can deploy safely. No Cloudinary credential should be placed in the Figma plugin or a ChatGPT prompt.
 3. In `/settings/agents`, create a **new** connection with the three permissions above and install its endpoint in ChatGPT. Existing connections retain their prior, narrower scopes.
 4. Search for a known Cloudinary tag, request one use, approve it in `/asset-uses`, and call `get_asset_delivery`. Check `/audit` for search, request, approval, and delivery events.
