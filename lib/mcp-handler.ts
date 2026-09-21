@@ -1,5 +1,4 @@
 import { McpServer, createMcpHandler } from '@modelcontextprotocol/server';
-import { Buffer } from 'node:buffer';
 import { z } from 'zod';
 import { AgentPrincipal, hasAgentScope } from '@/lib/agent-keys';
 import {
@@ -20,7 +19,6 @@ import { searchDamAssets } from '@/lib/dam-search';
 import { assetUseWorkflowEnabled } from '@/lib/workflow-flags';
 
 const MAX_MCP_PREVIEW_IMAGES = 5;
-const MAX_MCP_PREVIEW_BYTES = 2_000_000;
 
 function toolResult(value: unknown) {
   return {
@@ -28,40 +26,16 @@ function toolResult(value: unknown) {
   };
 }
 
-async function fetchMcpPreview(url: string) {
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
-    if (!response.ok) return null;
-
-    const mimeType = response.headers.get('content-type')?.split(';', 1)[0] ?? '';
-    if (!mimeType.startsWith('image/')) return null;
-
-    const contentLength = Number(response.headers.get('content-length') ?? 0);
-    if (contentLength > MAX_MCP_PREVIEW_BYTES) return null;
-
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > MAX_MCP_PREVIEW_BYTES) return null;
-
-    return {
-      type: 'image' as const,
-      data: Buffer.from(bytes).toString('base64'),
-      mimeType,
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function toolResultWithPreviews(value: unknown, previewUrls: string[]) {
-  const previews = await Promise.all(
-    previewUrls.slice(0, MAX_MCP_PREVIEW_IMAGES).map(fetchMcpPreview),
-  );
-
+function toolResultWithPreviews(value: unknown, previewUrls: string[]) {
+  const previewMarkdown = previewUrls
+    .slice(0, MAX_MCP_PREVIEW_IMAGES)
+    .map((url, index) => `![PixelSky asset preview ${index + 1}](${url})`)
+    .join('\n\n');
   return {
-    content: [
-      { type: 'text' as const, text: JSON.stringify(value, null, 2) },
-      ...previews.filter((preview): preview is NonNullable<typeof preview> => preview !== null),
-    ],
+    content: [{
+      type: 'text' as const,
+      text: `${previewMarkdown}\n\n${JSON.stringify(value, null, 2)}`,
+    }],
   };
 }
 
