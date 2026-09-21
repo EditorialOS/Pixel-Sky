@@ -23,6 +23,9 @@ type DamAsset = {
   preview_url: string;
   download_url: string;
   ai_tag_confidence?: Record<string, number>;
+  visual_description?: string;
+  visual_tags?: string[];
+  match_score?: number;
 };
 
 type DamSearchResponse = {
@@ -30,9 +33,12 @@ type DamSearchResponse = {
   total: number;
   assets: DamAsset[];
   next_cursor: string | null;
+  mode?: 'semantic' | 'strict';
   error?: string;
   missing?: string[];
   ai_fallback?: boolean;
+  workspace_folder?: string | null;
+  outside_scope_matches?: number;
 };
 
 type UploadSignatureResponse = {
@@ -133,6 +139,7 @@ export default function LightDamPage() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<DamSearchResponse>(EMPTY_RESULTS);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoadedAssets, setHasLoadedAssets] = useState(false);
   const [error, setError] = useState('');
   const [activeQuery, setActiveQuery] = useState('');
   const [isSemanticSearch, setIsSemanticSearch] = useState(true);
@@ -154,6 +161,8 @@ export default function LightDamPage() {
   });
   const [enableAutoTagging, setEnableAutoTagging] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const loadedOrganizationRef = useRef<string | null>(null);
+  const searchRequestRef = useRef(0);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [usageStatus, setUsageStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [billing, setBilling] = useState<BillingSummary | null>(null);
@@ -163,9 +172,11 @@ export default function LightDamPage() {
     searchQuery: string,
     modeOverride?: 'semantic' | 'strict',
   ) => {
+    const requestId = ++searchRequestRef.current;
     setActiveQuery(searchQuery);
     setIsLoading(true);
     setError('');
+    setResults(EMPTY_RESULTS);
     try {
       const mode = modeOverride ?? (isSemanticSearch ? 'semantic' : 'strict');
       const params = new URLSearchParams();
@@ -173,21 +184,36 @@ export default function LightDamPage() {
       params.set('mode', mode);
       const response = await fetch(`/api/dam/search?${params.toString()}`);
       const data = (await response.json()) as DamSearchResponse;
+      if (searchRequestRef.current !== requestId) return;
       if (!response.ok) {
         const message = data.error || 'Unable to load assets.';
         setError(message);
-        setResults(data);
+        setResults({ ...EMPTY_RESULTS, error: message, missing: data.missing });
         return;
+      }
+      if (!Array.isArray(data.assets)) {
+        throw new Error('Invalid DAM search response.');
       }
       setResults(data);
     } catch (err) {
+      if (searchRequestRef.current !== requestId) return;
       console.error('DAM search failed:', err);
       setError('Unable to reach the DAM search service.');
       setResults(EMPTY_RESULTS);
     } finally {
-      setIsLoading(false);
+      if (searchRequestRef.current === requestId) {
+        setIsLoading(false);
+        setHasLoadedAssets(true);
+      }
     }
   }, [isSemanticSearch]);
+
+  useEffect(() => {
+    if (!organizationLoaded || !organization) return;
+    if (loadedOrganizationRef.current === organization.id) return;
+    loadedOrganizationRef.current = organization.id;
+    void fetchAssets('', 'strict');
+  }, [organization, organizationLoaded, fetchAssets]);
 
   useEffect(() => {
     if (uploadFiles.length > 1 && uploadFields.assetNumber) {
@@ -259,11 +285,8 @@ export default function LightDamPage() {
 
   const handleClear = useCallback(() => {
     setQuery('');
-    setActiveQuery('');
-    setResults(EMPTY_RESULTS);
-    setIsLoading(false);
-    setError('');
-  }, []);
+    void fetchAssets('', 'strict');
+  }, [fetchAssets]);
 
   const handleSearchModeChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const nextValue = event.target.checked;
@@ -461,21 +484,22 @@ export default function LightDamPage() {
   const summary = useMemo(() => {
     if (isLoading) return 'Loading assets...';
     if (error) return 'Unable to load assets.';
-    if (!results.query && results.total === 0) {
-      return 'Search to see results.';
-    }
+    if (!hasLoadedAssets) return 'Loading your library...';
     const base = !results.query
       ? `${results.total} assets available`
       : `${results.total} results for "${results.query}"`;
-    return isSemanticSearch ? `${base} • AI search` : base;
-  }, [error, isLoading, isSemanticSearch, results.query, results.total]);
+    return results.mode === 'semantic' && results.query ? `${base} • AI search` : base;
+  }, [error, hasLoadedAssets, isLoading, results.mode, results.query, results.total]);
 
   const connectionBadge = useMemo(() => {
     if (error) {
-      return { label: 'Cloudinary not configured', color: 'bg-red-500' };
+      return { label: 'Cloudinary needs attention', color: 'bg-red-500' };
     }
-    return { label: 'Cloudinary connected', color: 'bg-os-success' };
-  }, [error]);
+    if (usage || hasLoadedAssets) {
+      return { label: 'Cloudinary connected', color: 'bg-os-success' };
+    }
+    return { label: 'Checking Cloudinary', color: 'bg-amber-500' };
+  }, [error, hasLoadedAssets, usage]);
 
   const limitReached = usage ? usage.used >= usage.limit : false;
   const billingActive = billing?.active ?? false;
@@ -560,6 +584,23 @@ export default function LightDamPage() {
                   className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-os-text shadow-sm transition hover:bg-os-bg"
                 >
                   Activity log
+                </a>
+                <a
+                  href="/asset-packs"
+                  className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-os-text shadow-sm transition hover:bg-os-bg"
+                >
+                  Asset packs
+                </a>
+                {process.env.NEXT_PUBLIC_PIXELSKY_ASSET_USES_ENABLED === 'true' && (
+                  <a href="/asset-uses" className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-os-text transition hover:bg-os-bg">
+                    Use approvals
+                  </a>
+                )}
+                <a
+                  href="/settings/agents"
+                  className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-os-text shadow-sm transition hover:bg-os-bg"
+                >
+                  Agent access
                 </a>
                 <a
                   href="/billing"
@@ -657,16 +698,237 @@ export default function LightDamPage() {
 
         {results.ai_fallback && (
           <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-700 shadow-sm">
-            AI search index is not ready yet. Showing keyword results instead.
+            Visual search index is not ready yet. Showing keyword results instead.
             <div className="mt-2">
               <a href="/settings/cloudinary" className="text-xs font-semibold underline">
-                Build AI index
+                Build visual index
               </a>
             </div>
           </div>
         )}
 
-        <section className="mb-10 rounded-3xl border border-black/10 bg-white p-6 shadow-sm">
+        {!error && results.query && results.assets.length === 0 && Boolean(results.outside_scope_matches) && (
+          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+            {results.outside_scope_matches} matching asset{results.outside_scope_matches === 1 ? '' : 's'} found in Cloudinary, but outside this workspace&apos;s folder
+            {results.workspace_folder ? ` (${results.workspace_folder})` : ''}. Check the folder in{' '}
+            <a href="/settings/cloudinary" className="font-semibold underline">Cloudinary settings</a>.
+          </div>
+        )}
+
+
+        <h2 className="mb-5 text-2xl font-semibold tracking-tight">Your library</h2>
+
+        {!error && hasLoadedAssets && results.assets.length === 0 && !isLoading && (
+          <div className="rounded-2xl border border-black/10 bg-white p-8 text-center text-sm text-os-muted shadow-sm">
+            {results.query
+              ? 'No assets matched that search. Try different keywords or remove filters.'
+              : 'No images found in this Cloudinary library. Check the folder in Cloudinary settings.'}
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="rounded-2xl border border-black/10 bg-white p-8 text-center text-sm text-os-muted shadow-sm">
+            Searching your library...
+          </div>
+        )}
+
+        {!isLoading && results.assets.length > 0 && (
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            {results.assets.map((asset) => {
+              const photographer = getField(asset, ['photographer', 'creator', 'credit']);
+              const usageRights = getField(asset, ['usage_rights', 'rights', 'license']);
+              const campaign = getField(asset, ['campaign', 'project', 'collection']);
+              const description = getField(asset, ['description', 'caption', 'alt']);
+              const aiTagEntries = Object.entries(asset.ai_tag_confidence ?? {})
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 4);
+              return (
+                <article
+                  key={asset.id}
+                  className="overflow-hidden rounded-3xl border border-black/10 bg-white shadow-sm transition hover:-translate-y-0.5"
+                >
+                  <div className="aspect-square w-full overflow-hidden bg-os-bg">
+                    <img
+                      src={asset.preview_url}
+                      alt={asset.visual_description || description || asset.filename}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                  <div className="space-y-4 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-semibold">{asset.filename}</h3>
+                        <p className="text-xs text-os-muted">{asset.public_id}</p>
+                      </div>
+                      {asset.format && (
+                        <span className="rounded-full border border-black/10 bg-os-bg px-2 py-1 text-[10px] uppercase text-os-muted">
+                          {asset.format}
+                        </span>
+                      )}
+                    </div>
+
+                    {asset.visual_description && (
+                      <p className="text-sm leading-relaxed text-os-muted">
+                        {asset.visual_description}
+                      </p>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-2 text-xs text-os-muted">
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wide text-os-muted/70">Asset #</span>
+                        <span className="text-os-text">{asset.asset_number || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wide text-os-muted/70">Added</span>
+                        <span className="text-os-text">{formatDate(asset.created_at)}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wide text-os-muted/70">Size</span>
+                        <span className="text-os-text">{formatBytes(asset.bytes)}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wide text-os-muted/70">Dimensions</span>
+                        <span className="text-os-text">
+                          {asset.width && asset.height ? `${asset.width}x${asset.height}` : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 text-xs text-os-muted">
+                      {campaign && (
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wide text-os-muted/70">Campaign</span>
+                          <div className="text-os-text">{campaign}</div>
+                        </div>
+                      )}
+                      {photographer && (
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wide text-os-muted/70">Photographer</span>
+                          <div className="text-os-text">{photographer}</div>
+                        </div>
+                      )}
+                      {usageRights && (
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wide text-os-muted/70">Usage Rights</span>
+                          <div className="text-os-text">{usageRights}</div>
+                        </div>
+                      )}
+                    </div>
+
+                    {asset.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {asset.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded-full border border-black/10 bg-os-bg px-2 py-1 text-[10px] text-os-muted"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {aiTagEntries.length > 0 && (
+                      <div className="space-y-2 text-xs text-os-muted">
+                        <span className="text-[10px] uppercase tracking-wide text-os-muted/70">
+                          AI tag confidence
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          {aiTagEntries.map(([tag, confidence]) => (
+                            <span
+                              key={`${asset.id}-${tag}`}
+                              className="rounded-full border border-black/10 bg-white px-2 py-1 text-[10px] text-os-text"
+                            >
+                              {tag} {Math.round(confidence * 100)}%
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3 pt-2 text-xs">
+                      {asset.secure_url && (
+                        <a
+                          href={asset.secure_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-lg border border-black/10 bg-white px-3 py-2 text-os-text shadow-sm transition hover:bg-os-bg"
+                        >
+                          Open
+                        </a>
+                      )}
+                      <a
+                        href={asset.download_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-lg bg-os-accent px-3 py-2 text-white shadow-sm transition hover:bg-blue-600"
+                      >
+                        Download
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => generateVariants(asset.public_id)}
+                        className="rounded-lg border border-black/10 bg-white px-3 py-2 text-os-text shadow-sm transition hover:bg-os-bg"
+                      >
+                        AI variants
+                      </button>
+                    </div>
+
+                    {variantState[asset.public_id]?.loading && (
+                      <p className="text-xs text-os-muted">Generating variants...</p>
+                    )}
+                    {variantState[asset.public_id]?.error && (
+                      <p className="text-xs text-red-600">{variantState[asset.public_id]?.error}</p>
+                    )}
+                    {variantState[asset.public_id]?.variants.length > 0 && (
+                      <div className="grid gap-3 pt-2">
+                        {variantState[asset.public_id]?.variants.map((variant) => (
+                          <div
+                            key={variant.id}
+                            className="flex flex-col gap-2 rounded-2xl border border-black/10 bg-white p-3 text-xs text-os-muted"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-os-text">{variant.label}</span>
+                              <span>
+                                {variant.width}x{variant.height}
+                              </span>
+                            </div>
+                            <img
+                              src={variant.preview_url}
+                              alt={variant.label}
+                              className="h-40 w-full rounded-xl object-cover"
+                              loading="lazy"
+                            />
+                            <a
+                              href={variant.download_url}
+                              className="inline-flex items-center justify-center rounded-lg bg-os-accent px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-600"
+                            >
+                              Download variant
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+
+        {!isLoading && Boolean(results.query) && results.assets.length > 0 && (
+          <div className="mt-8 flex justify-center">
+            <button
+              type="button"
+              onClick={handleClear}
+              className="rounded-full border border-black/10 bg-white px-5 py-2 text-sm text-os-text shadow-sm transition hover:bg-os-bg"
+            >
+              Show all assets
+            </button>
+          </div>
+        )}
+        <section className="mt-10 rounded-3xl border border-black/10 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Upload new asset</h2>
@@ -905,209 +1167,6 @@ export default function LightDamPage() {
             )}
           </form>
         </section>
-
-        {!error && results.assets.length === 0 && !isLoading && results.query && (
-          <div className="rounded-2xl border border-black/10 bg-white p-8 text-center text-sm text-os-muted shadow-sm">
-            No assets matched that search. Try different keywords or remove filters.
-          </div>
-        )}
-
-        {isLoading && (
-          <div className="rounded-2xl border border-black/10 bg-white p-8 text-center text-sm text-os-muted shadow-sm">
-            Searching your library...
-          </div>
-        )}
-
-        {!isLoading && results.assets.length > 0 && (
-          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {results.assets.map((asset) => {
-              const photographer = getField(asset, ['photographer', 'creator', 'credit']);
-              const usageRights = getField(asset, ['usage_rights', 'rights', 'license']);
-              const campaign = getField(asset, ['campaign', 'project', 'collection']);
-              const description = getField(asset, ['description', 'caption', 'alt']);
-              const aiTagEntries = Object.entries(asset.ai_tag_confidence ?? {})
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 4);
-              return (
-                <article
-                  key={asset.id}
-                  className="overflow-hidden rounded-3xl border border-black/10 bg-white shadow-sm transition hover:-translate-y-0.5"
-                >
-                  <div className="aspect-square w-full overflow-hidden bg-os-bg">
-                    <img
-                      src={asset.preview_url}
-                      alt={description || asset.filename}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
-                  </div>
-                  <div className="space-y-4 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-base font-semibold">{asset.filename}</h3>
-                        <p className="text-xs text-os-muted">{asset.public_id}</p>
-                      </div>
-                      {asset.format && (
-                        <span className="rounded-full border border-black/10 bg-os-bg px-2 py-1 text-[10px] uppercase text-os-muted">
-                          {asset.format}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-xs text-os-muted">
-                      <div>
-                        <span className="block text-[10px] uppercase tracking-wide text-os-muted/70">Asset #</span>
-                        <span className="text-os-text">{asset.asset_number || 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[10px] uppercase tracking-wide text-os-muted/70">Added</span>
-                        <span className="text-os-text">{formatDate(asset.created_at)}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[10px] uppercase tracking-wide text-os-muted/70">Size</span>
-                        <span className="text-os-text">{formatBytes(asset.bytes)}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[10px] uppercase tracking-wide text-os-muted/70">Dimensions</span>
-                        <span className="text-os-text">
-                          {asset.width && asset.height ? `${asset.width}x${asset.height}` : 'N/A'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1 text-xs text-os-muted">
-                      {campaign && (
-                        <div>
-                          <span className="text-[10px] uppercase tracking-wide text-os-muted/70">Campaign</span>
-                          <div className="text-os-text">{campaign}</div>
-                        </div>
-                      )}
-                      {photographer && (
-                        <div>
-                          <span className="text-[10px] uppercase tracking-wide text-os-muted/70">Photographer</span>
-                          <div className="text-os-text">{photographer}</div>
-                        </div>
-                      )}
-                      {usageRights && (
-                        <div>
-                          <span className="text-[10px] uppercase tracking-wide text-os-muted/70">Usage Rights</span>
-                          <div className="text-os-text">{usageRights}</div>
-                        </div>
-                      )}
-                    </div>
-
-                    {asset.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {asset.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-full border border-black/10 bg-os-bg px-2 py-1 text-[10px] text-os-muted"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {aiTagEntries.length > 0 && (
-                      <div className="space-y-2 text-xs text-os-muted">
-                        <span className="text-[10px] uppercase tracking-wide text-os-muted/70">
-                          AI tag confidence
-                        </span>
-                        <div className="flex flex-wrap gap-2">
-                          {aiTagEntries.map(([tag, confidence]) => (
-                            <span
-                              key={`${asset.id}-${tag}`}
-                              className="rounded-full border border-black/10 bg-white px-2 py-1 text-[10px] text-os-text"
-                            >
-                              {tag} {Math.round(confidence * 100)}%
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-3 pt-2 text-xs">
-                      {asset.secure_url && (
-                        <a
-                          href={asset.secure_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-lg border border-black/10 bg-white px-3 py-2 text-os-text shadow-sm transition hover:bg-os-bg"
-                        >
-                          Open
-                        </a>
-                      )}
-                      <a
-                        href={asset.download_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-lg bg-os-accent px-3 py-2 text-white shadow-sm transition hover:bg-blue-600"
-                      >
-                        Download
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => generateVariants(asset.public_id)}
-                        className="rounded-lg border border-black/10 bg-white px-3 py-2 text-os-text shadow-sm transition hover:bg-os-bg"
-                      >
-                        AI variants
-                      </button>
-                    </div>
-
-                    {variantState[asset.public_id]?.loading && (
-                      <p className="text-xs text-os-muted">Generating variants...</p>
-                    )}
-                    {variantState[asset.public_id]?.error && (
-                      <p className="text-xs text-red-600">{variantState[asset.public_id]?.error}</p>
-                    )}
-                    {variantState[asset.public_id]?.variants.length > 0 && (
-                      <div className="grid gap-3 pt-2">
-                        {variantState[asset.public_id]?.variants.map((variant) => (
-                          <div
-                            key={variant.id}
-                            className="flex flex-col gap-2 rounded-2xl border border-black/10 bg-white p-3 text-xs text-os-muted"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-semibold text-os-text">{variant.label}</span>
-                              <span>
-                                {variant.width}x{variant.height}
-                              </span>
-                            </div>
-                            <img
-                              src={variant.preview_url}
-                              alt={variant.label}
-                              className="h-40 w-full rounded-xl object-cover"
-                              loading="lazy"
-                            />
-                            <a
-                              href={variant.download_url}
-                              className="inline-flex items-center justify-center rounded-lg bg-os-accent px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-600"
-                            >
-                              Download variant
-                            </a>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-
-        {!isLoading && results.assets.length > 0 && (
-          <div className="mt-8 flex justify-center">
-            <button
-              type="button"
-              onClick={handleClear}
-              className="rounded-full border border-black/10 bg-white px-5 py-2 text-sm text-os-text shadow-sm transition hover:bg-os-bg"
-            >
-              Clear search results
-            </button>
-          </div>
-        )}
       </main>
     </div>
   );

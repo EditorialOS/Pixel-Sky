@@ -1,5 +1,7 @@
 # PixelSky (Light DAM)
 
+For the new agent/Figma use-approval workflow, see `docs/agent-workflow.md`. Its schema is in `supabase/migrations/202609180001_asset_use_requests.sql`; do not deploy the workflow before applying that migration. Figma developer source is in `figma-plugin/`.
+
 PixelSky is a lightweight digital asset manager (Light DAM) designed for small marketing teams
 who need a fast, searchable library of images (20-50 assets, not thousands). It uses
 Cloudinary as the single source of truth for storage, metadata, previews, and download
@@ -54,6 +56,7 @@ Create a `.env.local` file or configure these in Vercel:
 | `NEXT_PUBLIC_APP_URL` | Public app URL | Optional |
 | `OPENAI_API_KEY` | OpenAI API key | Yes (AI magic) |
 | `OPENAI_EMBEDDING_MODEL` | Embedding model | No (default text-embedding-3-small) |
+| `OPENAI_VISION_MODEL` | Image-description model | No (default gpt-4o-mini) |
 
 ## Authentication (Milestone 1)
 
@@ -100,6 +103,31 @@ create index if not exists audit_logs_org_id_idx on audit_logs (org_id);
 create index if not exists audit_logs_created_at_idx on audit_logs (created_at desc);
 ```
 
+Create `asset_packs` for the agent-ready review workflow:
+
+```sql
+create table if not exists asset_packs (
+  id uuid primary key default gen_random_uuid(),
+  org_id text not null,
+  title text not null,
+  brief text not null,
+  channels jsonb not null default '[]'::jsonb,
+  notes text,
+  status text not null default 'draft' check (status in ('draft', 'approved', 'rejected')),
+  assets jsonb not null default '[]'::jsonb,
+  created_by text not null,
+  reviewed_by text,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists asset_packs_org_updated_at_idx
+  on asset_packs (org_id, updated_at desc);
+```
+
+The same migration is committed at `supabase/migrations/202609170001_asset_packs.sql`.
+
 Create a `waitlist_signups` table for marketing lead capture:
 
 ```sql
@@ -114,43 +142,16 @@ create table if not exists waitlist_signups (
 
 > Note: credentials are stored in Supabase and accessed via the service role key.
 
-## AI search (Milestone 6)
+## Visual search
 
-Enable the vector extension and create the embeddings table:
+Run `supabase/migrations/202609170000_initial_schema.sql`, followed by
+`supabase/migrations/202609190001_visual_asset_index.sql`. PixelSky uses a vision
+model to create a factual description of each Cloudinary image, combines it with
+the asset's existing metadata, and stores the resulting embedding in Supabase.
 
-```sql
-create extension if not exists vector;
-
-create table if not exists asset_embeddings (
-  org_id text not null,
-  public_id text not null,
-  content text,
-  embedding vector(1536),
-  updated_at timestamptz default now(),
-  primary key (org_id, public_id)
-);
-
-create index if not exists asset_embeddings_org_id_idx on asset_embeddings (org_id);
-create index if not exists asset_embeddings_embedding_idx on asset_embeddings using ivfflat (embedding vector_cosine_ops);
-
-create or replace function match_asset_embeddings(
-  query_embedding vector(1536),
-  match_count int,
-  org_id text
-)
-returns table(public_id text, similarity float)
-language sql stable
-as $$
-  select public_id,
-         1 - (embedding <=> query_embedding) as similarity
-  from asset_embeddings
-  where asset_embeddings.org_id = match_asset_embeddings.org_id
-  order by embedding <=> query_embedding
-  limit match_count;
-$$;
-```
-
-Visit `/settings/cloudinary` and click **Build AI index** to embed existing assets.
+Visit `/settings/cloudinary` and click **Index library**. Indexing runs in small,
+retryable batches and skips assets whose Cloudinary ID and version are already
+current.
 
 Create an `organization_billing` table for Stripe:
 
@@ -185,6 +186,71 @@ Visit `/audit` to view the latest events.
 4. The UI renders previews and download links
 5. Uploads go directly to Cloudinary using a signed upload signature (supports larger files).
 
+## Agent-Ready Asset Packs
+
+`/asset-packs` turns a brief into a reviewable draft. Search candidates, select the assets,
+and approve the resulting pack before an agent can use it. The durable manifest is available
+at `GET /api/asset-packs/:id` after approval.
+
+Current authenticated API primitives:
+
+- `POST /api/dam/search` searches Cloudinary with strict or semantic matching.
+- `POST /api/asset-packs` creates a draft from verified workspace asset IDs.
+- `GET /api/asset-packs/:id` returns the pack and `pixelsky.asset-pack/v1` JSON manifest.
+- `PATCH /api/asset-packs/:id` approves or rejects a draft.
+
+Each pack snapshots delivery URLs, metadata, selected variants, and review state. Cloudinary
+remains the media source of truth; PixelSky owns the agent-facing manifest and audit trail.
+
+## Chat App Connections (No Key)
+
+PixelSky can expose one revocable, OAuth-protected MCP endpoint per workspace. This is
+the path for non-technical users connecting ChatGPT:
+
+1. A workspace admin opens `/settings/agents`, creates a chat connection, and chooses its permissions.
+2. They paste the generated endpoint into the chat client's custom connector setting.
+3. Each teammate signs in with their own PixelSky account. PixelSky verifies that person is a member of the selected workspace before any tool is available.
+4. A workspace admin can revoke the connection at any time. This immediately blocks every user and client using that endpoint.
+
+The endpoint itself is workspace-bound. OAuth identifies the user; the PixelSky connection
+record determines the allowed asset and pack actions. A chat client cannot request extra
+PixelSky permissions during sign-in.
+
+### OAuth operator setup
+
+Run `supabase/migrations/202609170003_agent_mcp_connections.sql`, expose
+`agent_mcp_connections` through Supabase Data API, and keep RLS enabled.
+
+PixelSky is its own OAuth authorization server for ChatGPT and uses the existing Clerk
+session only to identify the person approving access. It accepts ChatGPT's fixed callback
+URI and enforces S256 PKCE, so Clerk OAuth DCR and `PIXELSKY_OAUTH_ISSUER` are not
+required for this integration. Keep Clerk DCR disabled unless another integration needs it.
+
+## Remote MCP For Technical Clients
+
+PixelSky exposes a remote MCP endpoint at:
+
+```text
+https://light-dam-v1.vercel.app/api/mcp
+```
+
+Run `supabase/migrations/202609170002_agent_api_keys.sql`, expose the `agent_api_keys`
+table through Supabase Data API, and keep RLS enabled. A workspace admin can then create a
+scoped bearer key at `/settings/agents`. The plaintext key is displayed once only; PixelSky
+stores a SHA-256 hash.
+
+The endpoint supports clients that allow a static `Authorization: Bearer psk_live_...` header.
+It currently provides these tools according to the key's scopes:
+
+- `search_assets` returns previews, source URLs, and direct Cloudinary attachment download URLs.
+- `create_asset_pack_draft` validates selected asset IDs against the workspace and creates a draft.
+- `list_approved_asset_packs` and `get_approved_asset_pack` return only approved manifests.
+- `approve_asset_pack` is available only with the explicit `asset_packs:approve` scope and is audit logged.
+
+Default keys can search, read approved packs, and create drafts. Add `asset_packs:approve` only
+to a deliberately trusted agent connection. Static keys remain available for technical MCP
+clients that cannot launch a browser OAuth sign-in.
+
 ## Metadata Conventions
 
 PixelSky reads metadata from either Cloudinary **context** or **structured metadata**.
@@ -211,7 +277,7 @@ curl -X POST \
 - Search by image number: `image #1234`
 - Search by photographer: `photographer Alex`
 - Search by campaign name or tag: `spring launch`
-- Toggle **AI search** for broader semantic matches (uses tags + metadata)
+- Toggle **AI search** for natural-language matching across visible image content, tags, and metadata
 
 > Note: AI auto-tagging requires the Cloudinary Auto-Tagging add-on.
 
@@ -234,13 +300,16 @@ This repo can be imported into Replit directly from GitHub.
 Use this checklist before selling publicly:
 
 1. Set production auth keys in Vercel (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`) and verify they are not Clerk dev/test keys.
-2. Run Supabase migrations for `organization_cloudinary`, `audit_logs`, `asset_embeddings`, `organization_billing`, and `waitlist_signups`.
+2. Run every migration in `supabase/migrations`, including the asset-use workflow and visual index; expose `match_asset_embeddings` through Supabase Data API.
 3. Configure Stripe live mode keys, create live prices, and register `/api/stripe/webhook`.
-4. Connect a Cloudinary account, upload test assets, and run **Build AI index** in `/settings/cloudinary`.
+4. Connect a Cloudinary account and run **Index library** in `/settings/cloudinary`.
 5. Verify these flows end-to-end:
    - sign up/sign in
    - semantic search and strict search
    - upload + download + variant generation
    - checkout + webhook status updates
+   - OAuth chat connection: create, sign in as a workspace member, search assets, revoke, and confirm access is removed
    - `/audit` event visibility
+   - `/asset-packs` draft, approval, and JSON manifest flows
+   - `/settings/agents` key creation, revocation, MCP search, draft creation, explicit agent approval, and attachment download links
    - `/marketing` waitlist submissions

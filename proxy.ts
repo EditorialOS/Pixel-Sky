@@ -7,6 +7,15 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/api/marketing/waitlist(.*)',
+  '/api/mcp(.*)',
+  '/api/mcp/oauth(.*)',
+  '/api/figma/pair/start',
+  '/api/figma/pair/claim',
+  '/api/figma/search',
+  '/api/figma/disconnect',
+  '/api/figma/use(.*)',
+  '/.well-known/oauth-protected-resource/api/mcp(.*)',
+  '/.well-known/oauth-authorization-server(.*)',
 ])
 
 export default clerkMiddleware(async (auth, request) => {

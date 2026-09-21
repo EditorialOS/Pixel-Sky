@@ -8,7 +8,21 @@ export type AuditAction =
   | 'settings_updated'
   | 'ai_search'
   | 'ai_index'
-  | 'variant_generated';
+  | 'visual_index'
+  | 'variant_generated'
+  | 'asset_pack_created'
+  | 'asset_pack_approved'
+  | 'asset_pack_rejected'
+  | 'agent_key_created'
+  | 'agent_key_revoked'
+  | 'agent_connection_created'
+  | 'agent_connection_revoked'
+  | 'agent_mcp_search'
+  | 'asset_use_requested'
+  | 'asset_use_approved'
+  | 'asset_use_rejected'
+  | 'asset_use_revoked'
+  | 'asset_use_delivered';
 
 export type AuditEvent = {
   orgId: string;

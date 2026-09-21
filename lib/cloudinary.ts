@@ -49,6 +49,68 @@ export function configureCloudinary(settings: CloudinarySettings) {
   });
 }
 
+export function cloudinaryErrorMessage(error: unknown) {
+  const candidate = error as { message?: unknown; error?: { message?: unknown } } | null;
+  const message = typeof candidate?.error?.message === 'string'
+    ? candidate.error.message
+    : typeof candidate?.message === 'string'
+      ? candidate.message
+      : '';
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes('cloud_name mismatch')) {
+    return 'Cloudinary rejected these credentials because the cloud name does not match the API key and secret. Copy all three values from the same Cloudinary product environment.';
+  }
+  if (normalized.includes('invalid api key') || normalized.includes('invalid signature')) {
+    return 'Cloudinary rejected the API key or API secret. Copy both values again from the same Cloudinary product environment.';
+  }
+  if (normalized.includes('cannot read their details')) {
+    return message;
+  }
+  return 'Cloudinary could not verify this connection. Check the cloud name, API key, and API secret.';
+}
+
+export function logCloudinaryError(context: string, error: unknown) {
+  // Cloudinary error objects can contain request authentication details. Never log them verbatim.
+  console.error(`${context}: ${cloudinaryErrorMessage(error)}`);
+}
+
+export async function verifyCloudinarySettings(settings: CloudinarySettings) {
+  try {
+    await cloudinary.api.ping({
+      api_key: settings.apiKey,
+      api_secret: settings.apiSecret,
+      cloud_name: settings.cloudName,
+    });
+    await verifyCloudinaryAssetReadAccess(settings);
+    return null;
+  } catch (error) {
+    return cloudinaryErrorMessage(error);
+  }
+}
+
+async function verifyCloudinaryAssetReadAccess(settings: CloudinarySettings) {
+  let cursor: string | undefined;
+  let reportedTotal = 0;
+  let returnedAssets = 0;
+  for (let pageNumber = 0; pageNumber < 3; pageNumber += 1) {
+    const query = cloudinary.search
+      .expression('resource_type:image AND type:upload')
+      .max_results(1);
+    if (cursor) query.next_cursor(cursor);
+    const page = await (query as any).execute({
+      cloud_name: settings.cloudName,
+      api_key: settings.apiKey,
+      api_secret: settings.apiSecret,
+    });
+    reportedTotal = Math.max(reportedTotal, Number(page.total_count ?? 0));
+    returnedAssets += page.resources?.length ?? 0;
+    cursor = page.next_cursor ?? undefined;
+    if (returnedAssets > 0 || !cursor) break;
+  }
+  assertReadableCloudinaryAssets(reportedTotal, returnedAssets);
+}
+
 function escapeExpressionValue(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return '';
@@ -62,21 +124,84 @@ export function buildAssetExpression(folder?: string | null) {
   return `resource_type:image AND type:upload${folderExpression}`;
 }
 
-export async function getAssetCount(settings: CloudinarySettings, maxResults: number) {
-  configureCloudinary(settings);
-  const expression = buildAssetExpression(settings.folder);
-  const searchQuery = cloudinary.search
-    .expression(expression)
-    .sort_by('created_at', 'desc')
-    .max_results(maxResults);
-  const result = await searchQuery.execute();
-  if (typeof result.total_count === 'number') {
-    return result.total_count;
-  }
-  return Array.isArray(result.resources) ? result.resources.length : 0;
+export function assetIsInWorkspaceFolder(
+  asset: { folder?: string | null; asset_folder?: string | null; public_id: string },
+  folder?: string | null,
+) {
+  const scope = folder?.trim().replace(/^\/+|\/+$/g, '');
+  if (!scope) return true;
+  const actual = asset.asset_folder ?? asset.folder ?? asset.public_id.split('/').slice(0, -1).join('/');
+  return actual === scope || actual.startsWith(`${scope}/`);
 }
 
-export async function getAssetsByIds(publicIds: string[]) {
+export function buildAssetAnalysisUrl(publicId: string, cloudName: string) {
+  return cloudinary.url(publicId, {
+    cloud_name: cloudName,
+    secure: true,
+    resource_type: 'image',
+    type: 'upload',
+    transformation: [{
+      width: 1_600,
+      height: 1_600,
+      crop: 'limit',
+      quality: 'auto:good',
+      fetch_format: 'jpg',
+    }],
+  });
+}
+
+// Search without a folder expression: Cloudinary's folder and asset_folder fields
+// differ between fixed-folder and dynamic-folder accounts.
+export async function scanImageAssets(
+  settings: CloudinarySettings,
+  maxAssets = 5_000,
+  expression = 'resource_type:image AND type:upload',
+) {
+  const resources: any[] = [];
+  let cursor: string | undefined;
+  let reportedTotal = 0;
+  do {
+    const query = cloudinary.search
+      .expression(expression)
+      .sort_by('created_at', 'desc')
+      .with_field('context')
+      .with_field('metadata')
+      .with_field('tags')
+      .max_results(500);
+    if (cursor) query.next_cursor(cursor);
+    const page = await (query as any).execute({
+      cloud_name: settings.cloudName,
+      api_key: settings.apiKey,
+      api_secret: settings.apiSecret,
+    });
+    reportedTotal = Math.max(reportedTotal, Number(page.total_count ?? 0));
+    resources.push(...(page.resources ?? []));
+    cursor = page.next_cursor ?? undefined;
+    if (cursor && resources.length >= maxAssets) {
+      throw new Error(`The connected Cloudinary library exceeds the ${maxAssets}-asset search limit. Narrow the workspace folder or contact support.`);
+    }
+  } while (cursor);
+  assertReadableCloudinaryAssets(reportedTotal, resources.length);
+  return resources;
+}
+
+export function assertReadableCloudinaryAssets(reportedTotal: number, returnedAssets: number) {
+  if (reportedTotal > 0 && returnedAssets === 0) {
+    throw new Error(
+      `Cloudinary reports ${reportedTotal} active assets, but this API key cannot read their details. Use a Cloudinary API key with Resources/Admin API read access.`,
+    );
+  }
+}
+
+export async function getAssetCount(settings: CloudinarySettings, maxResults: number) {
+  const assets = await scanImageAssets(settings, Math.max(maxResults, 5_000));
+  return assets.filter((asset) => assetIsInWorkspaceFolder(asset, settings.folder)).length;
+}
+
+export async function getAssetsByIds(
+  publicIds: string[],
+  settings?: CloudinarySettings,
+) {
   if (publicIds.length === 0) return [];
   const result = await cloudinary.api.resources_by_ids(publicIds, {
     resource_type: 'image',
@@ -84,6 +209,13 @@ export async function getAssetsByIds(publicIds: string[]) {
     context: true,
     metadata: true,
     tags: true,
+    ...(settings
+      ? {
+        cloud_name: settings.cloudName,
+        api_key: settings.apiKey,
+        api_secret: settings.apiSecret,
+      }
+      : {}),
   });
   return result.resources ?? [];
 }

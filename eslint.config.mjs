@@ -15,6 +15,10 @@ export default defineConfig([
   },
   globalIgnores([
     '.next/**',
+    '.vercel/**',
+    'injector-system/**',
+    'minimal-os-mcp/**',
+    'figma-plugin/**',
     'out/**',
     'build/**',
     'next-env.d.ts',

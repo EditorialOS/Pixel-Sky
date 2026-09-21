@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { logAuditEvent } from '@/lib/audit';
+import { verifyCloudinarySettings } from '@/lib/cloudinary';
 
 type CloudinarySettingsPayload = {
   cloudName?: string;
@@ -51,12 +52,15 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { userId, orgId } = await auth();
+  const { userId, orgId, orgRole } = await auth();
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
   if (!orgId) {
     return NextResponse.json({ error: 'Workspace required.' }, { status: 403 });
+  }
+  if (orgRole !== 'org:admin') {
+    return NextResponse.json({ error: 'Workspace admin access is required to change Cloudinary settings.' }, { status: 403 });
   }
 
   const payload = (await request.json()) as CloudinarySettingsPayload;
@@ -70,6 +74,11 @@ export async function POST(request: NextRequest) {
       { error: 'Cloud name, API key, and API secret are required.' },
       { status: 400 },
     );
+  }
+
+  const verificationError = await verifyCloudinarySettings({ cloudName, apiKey, apiSecret, folder });
+  if (verificationError) {
+    return NextResponse.json({ error: verificationError }, { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();
