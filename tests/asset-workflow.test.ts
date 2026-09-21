@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assertReadableCloudinaryAssets, assetIsInWorkspaceFolder } from '../lib/cloudinary';
 import { buildTagExpression, rankStrictAssets } from '../lib/dam-search';
-import { agentCandidate, agentDraftPack } from '../lib/agent-output';
+import { agentAssetUseRequest, agentCandidate, agentDraftPack } from '../lib/agent-output';
 import { assertApprovalActive, assertApprovedVersion, AssetUseError } from '../lib/asset-use-requests';
 import { parseAssetVisualDescription, visualDescriptionTerms } from '../lib/asset-description';
 import { buildEmbeddingText } from '../lib/embeddings';
+import { mcpOAuthResource, UNIVERSAL_MCP_PATH } from '../lib/mcp-oauth';
 
 test('strict search finds an older Cloudinary asset by its travel tag', () => {
   assert.equal(buildTagExpression('Travel'), 'resource_type:image AND type:upload AND (tags:travel)');
@@ -45,7 +46,7 @@ test('Cloudinary asset visibility failures are not reported as an empty library'
 
 test('agent candidate and draft outputs omit delivery URLs', () => {
   const candidate = agentCandidate({
-    id: 'asset-1', public_id: 'travel/one', filename: 'one', tags: [], context: {}, metadata: {},
+    id: 'asset-1', asset_id: 'cloudinary-asset-1', version: 3, public_id: 'travel/one', filename: 'one', tags: [], context: {}, metadata: {},
     source_url: 'https://source.example', secure_url: 'https://source.example',
     preview_url: 'https://preview.example', download_url: 'https://download.example',
     agent_download_url: 'https://agent-download.example',
@@ -54,6 +55,9 @@ test('agent candidate and draft outputs omit delivery URLs', () => {
   assert.equal('source_url' in candidate, false);
   assert.equal('download_url' in candidate, false);
   assert.equal('agent_download_url' in candidate, false);
+  assert.equal('id' in candidate, false);
+  assert.equal('asset_id' in candidate, false);
+  assert.equal('version' in candidate, false);
 
   const draft = agentDraftPack({
     id: 'pack-1', org_id: 'org-1', title: 'Travel', brief: 'Travel images', channels: [], notes: null,
@@ -67,6 +71,21 @@ test('agent candidate and draft outputs omit delivery URLs', () => {
     }],
   });
   assert.deepEqual(draft.assets[0], { public_id: 'travel/one', preview_url: 'https://preview.example' });
+});
+
+test('agent asset-use output omits tenant and identity fields', () => {
+  const request = agentAssetUseRequest({
+    id: 'request-1', org_id: 'org-secret', public_id: 'travel/one', asset_id: 'asset-secret',
+    asset_version: 3, filename: 'one', preview_url: 'https://preview.example', usage_rights: null,
+    credit: null, tags: ['travel'], channel: 'email', campaign: 'Autumn', placement: 'hero',
+    region: 'US', purpose: 'Launch', status: 'pending', requested_by: 'user-secret', reviewed_by: null,
+    reviewed_at: null, expires_at: null, created_at: '2026-09-21T00:00:00Z', updated_at: '2026-09-21T00:00:00Z',
+  });
+  assert.equal(request.id, 'request-1');
+  assert.equal('org_id' in request, false);
+  assert.equal('asset_id' in request, false);
+  assert.equal('requested_by' in request, false);
+  assert.equal('reviewed_by' in request, false);
 });
 
 test('visual descriptions become searchable embedding content', () => {
@@ -90,4 +109,17 @@ test('visual descriptions become searchable embedding content', () => {
   assert.match(content, /cyclist rides along a coastal road/i);
   assert.match(content, /adventurous/);
   assert.match(content, /travel/);
+});
+
+test('public ChatGPT MCP uses one universal resource while private connections stay workspace-bound', () => {
+  const request = new Request('https://light-dam-v1.vercel.app/api/mcp/oauth/authorize');
+  assert.deepEqual(
+    mcpOAuthResource(`https://light-dam-v1.vercel.app${UNIVERSAL_MCP_PATH}`, request),
+    { kind: 'universal' },
+  );
+  assert.deepEqual(
+    mcpOAuthResource('https://light-dam-v1.vercel.app/api/mcp/3ae5ccb8-aa09-4168-a824-622d1579caad', request),
+    { kind: 'connection', connectionId: '3ae5ccb8-aa09-4168-a824-622d1579caad' },
+  );
+  assert.equal(mcpOAuthResource('https://evil.example/api/mcp/chatgpt', request), null);
 });

@@ -17,8 +17,19 @@ export default function PrivacyPage() {
             the service. Uploaded assets remain in your connected Cloudinary account.
           </p>
           <p>
+            When you connect Cloudinary, PixelSky processes asset identifiers, previews, tags,
+            descriptive metadata, and usage-rights fields so your workspace and connected agents
+            can search the library. PixelSky records asset-use requests, approvals, deliveries,
+            and related audit events. Delivery links are returned only for approved uses.
+          </p>
+          <p>
             We use Supabase for application data, Stripe for billing, and Clerk for authentication.
             These providers process data on our behalf to deliver the product.
+          </p>
+          <p>
+            If you request support, PixelSky stores the email address you provide so the support
+            team can respond. MCP and Figma access can be disconnected, and workspace membership
+            is checked before protected asset data is returned.
           </p>
           <p>
             To request data deletion or export, contact support from the same email tied to your

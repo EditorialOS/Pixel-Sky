@@ -6,6 +6,7 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'PixelSky — Light DAM',
   description: 'PixelSky is a Light DAM for fast, AI-native asset management.',
+  icons: { icon: '/pixelsky-mark.svg' },
 }
 
 export default function RootLayout({

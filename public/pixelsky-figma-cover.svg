@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 960" role="img" aria-labelledby="title desc">
+  <title id="title">PixelSky for Figma</title>
+  <desc id="desc">Find the right image. Approve the use. Place it in Figma.</desc>
+  <rect width="1920" height="960" fill="#f5f0e8"/>
+  <path d="M0 670h270v-95h260v95h300V515h320v155h250V430h520v530H0z" fill="#d9e4df"/>
+  <rect x="130" y="128" width="168" height="168" rx="38" fill="#317184"/>
+  <path d="M162 223h38v-24h44v24h22v-40h32v81H162z" fill="#142f36"/>
+  <circle cx="254" cy="178" r="24" fill="#f0a54b"/>
+  <text x="130" y="405" fill="#142f36" font-family="Georgia, serif" font-size="94" font-weight="700">PixelSky for Figma</text>
+  <text x="136" y="488" fill="#49656c" font-family="Helvetica, sans-serif" font-size="38">Find the right image. Approve the use. Place it.</text>
+  <g transform="translate(1200 150)">
+    <rect width="560" height="660" rx="42" fill="#fffdf9" stroke="#c8d0cc" stroke-width="4"/>
+    <text x="46" y="82" fill="#142f36" font-family="Helvetica, sans-serif" font-size="32" font-weight="700">Search PixelSky</text>
+    <rect x="46" y="118" width="468" height="70" rx="18" fill="#f5f0e8" stroke="#c8d0cc" stroke-width="3"/>
+    <text x="74" y="163" fill="#6d7c7e" font-family="Helvetica, sans-serif" font-size="24">coastal travel</text>
+    <rect x="46" y="225" width="220" height="220" rx="24" fill="#317184"/>
+    <circle cx="202" cy="295" r="34" fill="#f0a54b"/>
+    <path d="M46 369h68v-38h64v38h88v76H46z" fill="#142f36"/>
+    <rect x="294" y="225" width="220" height="220" rx="24" fill="#c9a979"/>
+    <path d="M294 361l62-68 45 49 42-37 71 72v68H294z" fill="#596d61"/>
+    <rect x="46" y="488" width="468" height="74" rx="22" fill="#317184"/>
+    <text x="183" y="536" fill="#ffffff" font-family="Helvetica, sans-serif" font-size="27" font-weight="700">Request use</text>
+    <text x="46" y="610" fill="#49656c" font-family="Helvetica, sans-serif" font-size="22">Human approval before delivery</text>
+  </g>
+</svg>
