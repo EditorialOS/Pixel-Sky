@@ -1,4 +1,5 @@
 import { McpServer, createMcpHandler } from '@modelcontextprotocol/server';
+import { Buffer } from 'node:buffer';
 import { z } from 'zod';
 import { AgentPrincipal, hasAgentScope } from '@/lib/agent-keys';
 import {
@@ -18,9 +19,49 @@ import {
 import { searchDamAssets } from '@/lib/dam-search';
 import { assetUseWorkflowEnabled } from '@/lib/workflow-flags';
 
+const MAX_MCP_PREVIEW_IMAGES = 5;
+const MAX_MCP_PREVIEW_BYTES = 2_000_000;
+
 function toolResult(value: unknown) {
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
+  };
+}
+
+async function fetchMcpPreview(url: string) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+    if (!response.ok) return null;
+
+    const mimeType = response.headers.get('content-type')?.split(';', 1)[0] ?? '';
+    if (!mimeType.startsWith('image/')) return null;
+
+    const contentLength = Number(response.headers.get('content-length') ?? 0);
+    if (contentLength > MAX_MCP_PREVIEW_BYTES) return null;
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > MAX_MCP_PREVIEW_BYTES) return null;
+
+    return {
+      type: 'image' as const,
+      data: Buffer.from(bytes).toString('base64'),
+      mimeType,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function toolResultWithPreviews(value: unknown, previewUrls: string[]) {
+  const previews = await Promise.all(
+    previewUrls.slice(0, MAX_MCP_PREVIEW_IMAGES).map(fetchMcpPreview),
+  );
+
+  return {
+    content: [
+      { type: 'text' as const, text: JSON.stringify(value, null, 2) },
+      ...previews.filter((preview): preview is NonNullable<typeof preview> => preview !== null),
+    ],
   };
 }
 
@@ -93,9 +134,13 @@ function createServer(principal: AgentPrincipal) {
               console.error('Agent MCP search audit error:', auditError);
             }
           }
-          return toolResult(assetUseWorkflowEnabled()
+          const agentResult = assetUseWorkflowEnabled()
             ? { ...result, assets: result.assets.map(agentCandidate) }
-            : result);
+            : result;
+          return toolResultWithPreviews(
+            agentResult,
+            result.assets.map((asset) => asset.preview_url),
+          );
         } catch (error) {
           return toolError(error);
         }
