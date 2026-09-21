@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getActiveAgentConnection } from '@/lib/agent-connections';
 import {
-  connectionIdFromResource,
   createAuthorizationCode,
-  currentOAuthUser,
+  currentOAuthIdentity,
   hasWorkspaceMembership,
   isChatGptClient,
   isMcpOAuthConfigured,
+  mcpOAuthResource,
   requestedScope,
 } from '@/lib/mcp-oauth';
 
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   const responseType = url.searchParams.get('response_type');
   const codeChallenge = url.searchParams.get('code_challenge');
   const codeChallengeMethod = url.searchParams.get('code_challenge_method');
-  const connectionId = connectionIdFromResource(url.searchParams.get('resource'), request);
+  const resource = mcpOAuthResource(url.searchParams.get('resource'), request);
 
   if (!isChatGptClient(clientId, redirectUri)) {
     return errorResponse(request, 'This OAuth client is not registered for PixelSky.', 400);
@@ -33,27 +33,35 @@ export async function GET(request: Request) {
   if (responseType !== 'code' || !codeChallenge || codeChallengeMethod !== 'S256') {
     return errorResponse(request, 'PixelSky requires Authorization Code flow with S256 PKCE.', 400);
   }
-  if (!connectionId) {
-    return errorResponse(request, 'The PixelSky workspace connection is missing from the authorization request.', 400);
+  if (!resource) {
+    return errorResponse(request, 'The PixelSky MCP resource is missing from the authorization request.', 400);
   }
 
-  const connection = await getActiveAgentConnection(connectionId);
-  if (!connection) return errorResponse(request, 'This PixelSky workspace connection was not found or was revoked.', 404);
-
-  const userId = await currentOAuthUser();
+  const { userId, orgId } = await currentOAuthIdentity();
   if (!userId) {
     const signInUrl = new URL('/sign-in', request.url);
     signInUrl.searchParams.set('redirect_url', request.url);
     return NextResponse.redirect(signInUrl);
   }
-  if (!(await hasWorkspaceMembership(userId, connection.org_id))) {
+
+  let authorizedOrgId = orgId ?? undefined;
+  if (resource.kind === 'connection') {
+    const connection = await getActiveAgentConnection(resource.connectionId);
+    if (!connection) return errorResponse(request, 'This PixelSky workspace connection was not found or was revoked.', 404);
+    authorizedOrgId = connection.org_id;
+  } else if (!authorizedOrgId) {
+    return errorResponse(request, 'Select or create a PixelSky workspace, then connect ChatGPT again.', 403);
+  }
+
+  if (!authorizedOrgId || !(await hasWorkspaceMembership(userId, authorizedOrgId))) {
     return errorResponse(request, 'Your PixelSky account is not a member of this workspace.', 403);
   }
 
   const callback = new URL(redirectUri);
   callback.searchParams.set('code', createAuthorizationCode({
-    connectionId,
+    resource,
     userId,
+    orgId: authorizedOrgId,
     redirectUri,
     codeChallenge,
     scope: requestedScope(url.searchParams.get('scope')),

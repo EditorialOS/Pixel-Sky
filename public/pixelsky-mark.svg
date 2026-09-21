@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">PixelSky</title>
+  <desc id="desc">A blue sky window with a warm sun and a pixel-shaped horizon.</desc>
+  <rect width="512" height="512" rx="112" fill="#f5f0e8"/>
+  <path d="M96 118h320v276H96z" fill="#317184"/>
+  <path d="M96 296h72v-44h88v44h72v-72h88v170H96z" fill="#142f36"/>
+  <circle cx="332" cy="194" r="54" fill="#f0a54b"/>
+  <path d="M96 118h320v276H96z" fill="none" stroke="#142f36" stroke-width="24" stroke-linejoin="round"/>
+</svg>

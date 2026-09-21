@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 
 type WaitlistPayload = {
   email?: string;
+  source?: string;
 };
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -21,6 +22,7 @@ export async function POST(request: NextRequest) {
 
   const rawEmail = payload.email ?? '';
   const email = normalizeEmail(rawEmail);
+  const source = payload.source === 'support' ? 'support' : 'marketing';
   if (!email || !EMAIL_REGEX.test(email)) {
     return NextResponse.json({ error: 'Please enter a valid email address.' }, { status: 400 });
   }
@@ -41,7 +43,7 @@ export async function POST(request: NextRequest) {
       [
         {
           email,
-          source: 'marketing',
+          source,
           updated_at: new Date().toISOString(),
         },
       ],

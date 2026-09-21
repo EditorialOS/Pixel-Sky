@@ -221,6 +221,9 @@ export default function MarketingPage() {
             <Link href="/legal/terms" className="underline">
               Terms
             </Link>
+            <Link href="/support" className="underline">
+              Support
+            </Link>
           </div>
         </div>
       </footer>

@@ -1,6 +1,10 @@
 import { getActiveAgentConnection } from '@/lib/agent-connections';
 import { handleAuthenticatedMcp, withMcpCors } from '@/lib/mcp-handler';
-import { authenticateMcpOAuthConnection, isMcpOAuthConfigured } from '@/lib/mcp-oauth';
+import {
+  authenticateMcpOAuthConnection,
+  authenticateUniversalMcpOAuth,
+  isMcpOAuthConfigured,
+} from '@/lib/mcp-oauth';
 
 export const runtime = 'nodejs';
 
@@ -32,6 +36,20 @@ async function handleMcp(request: Request, context: RouteContext) {
   }
 
   let connection;
+  if (connectionId === 'chatgpt') {
+    try {
+      const principal = await authenticateUniversalMcpOAuth(request);
+      if (!principal) return oauthUnauthorizedResponse(request, connectionId);
+      return handleAuthenticatedMcp(request, principal);
+    } catch (error) {
+      console.error('Universal MCP OAuth authentication error:', error);
+      return withMcpCors(new Response(JSON.stringify({ error: 'Chat authentication is temporarily unavailable.' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      }));
+    }
+  }
+
   try {
     connection = await getActiveAgentConnection(connectionId);
   } catch (error) {

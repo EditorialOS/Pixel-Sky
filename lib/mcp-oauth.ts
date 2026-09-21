@@ -1,7 +1,7 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { type AgentConnectionRecord } from '@/lib/agent-connections';
-import { type AgentPrincipal } from '@/lib/agent-keys';
+import { DEFAULT_AGENT_SCOPES, type AgentPrincipal, type AgentScope } from '@/lib/agent-keys';
 
 const CHATGPT_CLIENT_ID = 'pixelsky-chatgpt';
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
@@ -11,14 +11,23 @@ type TokenKind = 'access' | 'authorization_code' | 'refresh';
 
 type SignedToken = {
   clientId: string;
-  connectionId: string;
+  connectionId?: string;
   exp: number;
   kind: TokenKind;
+  orgId?: string;
   redirectUri: string;
+  resourceKind?: 'connection' | 'universal';
   scope: string;
+  scopes?: AgentScope[];
   userId: string;
   codeChallenge?: string;
 };
+
+export type McpOAuthResource =
+  | { kind: 'connection'; connectionId: string }
+  | { kind: 'universal' };
+
+export const UNIVERSAL_MCP_PATH = '/api/mcp/chatgpt';
 
 function signingKey() {
   const clerkSecret = process.env.CLERK_SECRET_KEY;
@@ -100,13 +109,14 @@ export function chatGptClientRegistration(redirectUri: string) {
   };
 }
 
-export function connectionIdFromResource(resource: string | null, request: Request) {
+export function mcpOAuthResource(resource: string | null, request: Request): McpOAuthResource | null {
   if (!resource) return null;
   try {
     const url = new URL(resource);
     if (url.origin !== new URL(request.url).origin) return null;
+    if (url.pathname === UNIVERSAL_MCP_PATH) return { kind: 'universal' };
     const match = url.pathname.match(/^\/api\/mcp\/([0-9a-f-]{36})$/i);
-    return match?.[1] ?? null;
+    return match?.[1] ? { kind: 'connection', connectionId: match[1] } : null;
   } catch {
     return null;
   }
@@ -119,24 +129,34 @@ export async function hasWorkspaceMembership(userId: string, orgId: string) {
 }
 
 export function createAuthorizationCode({
-  connectionId,
+  resource,
   userId,
+  orgId,
   redirectUri,
   codeChallenge,
   scope,
 }: {
-  connectionId: string;
+  resource: McpOAuthResource;
   userId: string;
+  orgId?: string;
   redirectUri: string;
   codeChallenge: string;
   scope: string;
 }) {
+  if (resource.kind === 'universal' && !orgId) {
+    throw new Error('A PixelSky workspace is required for the public ChatGPT connection.');
+  }
   return encode({
     clientId: CHATGPT_CLIENT_ID,
-    connectionId,
+    ...(resource.kind === 'connection' ? { connectionId: resource.connectionId } : {}),
     codeChallenge,
     exp: Math.floor(Date.now() / 1000) + 5 * 60,
     kind: 'authorization_code',
+    ...(resource.kind === 'universal' ? {
+      orgId,
+      resourceKind: 'universal' as const,
+      scopes: DEFAULT_AGENT_SCOPES,
+    } : { resourceKind: 'connection' as const }),
     redirectUri,
     scope,
     userId,
@@ -163,9 +183,12 @@ function issueTokens(payload: SignedToken) {
   const now = Math.floor(Date.now() / 1000);
   const shared = {
     clientId: payload.clientId,
-    connectionId: payload.connectionId,
+    ...(payload.connectionId ? { connectionId: payload.connectionId } : {}),
+    ...(payload.orgId ? { orgId: payload.orgId } : {}),
     redirectUri: payload.redirectUri,
+    ...(payload.resourceKind ? { resourceKind: payload.resourceKind } : {}),
     scope: payload.scope,
+    ...(payload.scopes ? { scopes: payload.scopes } : {}),
     userId: payload.userId,
   };
   const accessToken = encode({ ...shared, exp: now + ACCESS_TOKEN_TTL_SECONDS, kind: 'access' });
@@ -188,7 +211,7 @@ export async function authenticateMcpOAuthConnection(
   if (!match) return null;
 
   const token = decode(match[1], 'access');
-  if (!token || token.connectionId !== connection.id || token.clientId !== CHATGPT_CLIENT_ID) return null;
+  if (!token || token.resourceKind === 'universal' || token.connectionId !== connection.id || token.clientId !== CHATGPT_CLIENT_ID) return null;
   if (!(await hasWorkspaceMembership(token.userId, connection.org_id))) return null;
 
   return {
@@ -202,9 +225,28 @@ export async function authenticateMcpOAuthConnection(
   };
 }
 
-export async function currentOAuthUser() {
+export async function authenticateUniversalMcpOAuth(request: Request): Promise<AgentPrincipal | null> {
+  const authorization = request.headers.get('authorization');
+  const match = authorization?.match(/^Bearer\s+(.+)$/i);
+  if (!match) return null;
+
+  const token = decode(match[1], 'access');
+  if (!token || token.resourceKind !== 'universal' || token.clientId !== CHATGPT_CLIENT_ID) return null;
+  if (!token.orgId || !token.scopes || !(await hasWorkspaceMembership(token.userId, token.orgId))) return null;
+
+  return {
+    id: `oauth:${token.userId}:chatgpt:${token.orgId}`,
+    orgId: token.orgId,
+    name: 'PixelSky for ChatGPT',
+    scopes: token.scopes,
+    actorId: token.userId,
+    authType: 'oauth',
+  };
+}
+
+export async function currentOAuthIdentity() {
   const identity = await auth();
-  return identity.userId;
+  return { userId: identity.userId, orgId: identity.orgId };
 }
 
 export function requestedScope(value: string | null) {

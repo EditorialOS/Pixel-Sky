@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 const isPublicRoute = createRouteMatcher([
   '/marketing(.*)',
   '/legal(.*)',
+  '/support(.*)',
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/api/marketing/waitlist(.*)',
@@ -16,6 +17,7 @@ const isPublicRoute = createRouteMatcher([
   '/api/figma/use(.*)',
   '/.well-known/oauth-protected-resource/api/mcp(.*)',
   '/.well-known/oauth-authorization-server(.*)',
+  '/.well-known/openai-apps-challenge',
 ])
 
 export default clerkMiddleware(async (auth, request) => {

@@ -216,6 +216,17 @@ The endpoint itself is workspace-bound. OAuth identifies the user; the PixelSky 
 record determines the allowed asset and pack actions. A chat client cannot request extra
 PixelSky permissions during sign-in.
 
+For the public PixelSky plugin, ChatGPT uses one universal endpoint:
+
+```text
+https://light-dam-v1.vercel.app/api/mcp/chatgpt
+```
+
+OAuth binds that installation to the signed-in user's active PixelSky workspace. The public
+connection receives the safe default scopes and cannot approve asset uses or asset packs.
+Workspace-specific endpoints remain available for private installations that need an admin to
+choose narrower permissions or explicitly delegate pack approval.
+
 ### OAuth operator setup
 
 Run `supabase/migrations/202609170003_agent_mcp_connections.sql`, expose

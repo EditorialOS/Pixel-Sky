@@ -25,12 +25,14 @@ export async function OPTIONS() {
 
 export async function GET(request: Request, context: RouteContext) {
   const { connectionId } = await context.params;
-  try {
-    const connection = await getActiveAgentConnection(connectionId);
-    if (!connection) return response({ error: 'Chat connection not found.' }, 404);
-  } catch (error) {
-    console.error('OAuth metadata connection lookup error:', error);
-    return response({ error: 'Chat connection lookup is temporarily unavailable.' }, 503);
+  if (connectionId !== 'chatgpt') {
+    try {
+      const connection = await getActiveAgentConnection(connectionId);
+      if (!connection) return response({ error: 'Chat connection not found.' }, 404);
+    } catch (error) {
+      console.error('OAuth metadata connection lookup error:', error);
+      return response({ error: 'Chat connection lookup is temporarily unavailable.' }, 503);
+    }
   }
 
   const resource = new URL(`/api/mcp/${connectionId}`, request.url).toString();

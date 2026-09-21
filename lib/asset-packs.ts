@@ -183,7 +183,9 @@ export function buildAgentAssetPackManifest(pack: AssetPackRecord, cloudName: st
   return {
     ...manifest,
     assets: manifest.assets.map((asset) => ({
-      ...asset,
+      public_id: asset.public_id,
+      filename: asset.filename,
+      source_url: asset.source_url,
       download_url: asset.download_url || cloudinary.url(asset.public_id, {
         cloud_name: cloudName,
         secure: true,
@@ -191,6 +193,13 @@ export function buildAgentAssetPackManifest(pack: AssetPackRecord, cloudName: st
         type: 'upload',
         flags: 'attachment',
       }),
+      preview_url: asset.preview_url,
+      tags: asset.tags,
+      campaign: asset.campaign,
+      usage_rights: asset.usage_rights,
+      description: asset.description,
+      rationale: asset.rationale,
+      variants: asset.variants,
     })),
   };
 }

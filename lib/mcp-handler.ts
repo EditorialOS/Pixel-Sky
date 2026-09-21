@@ -8,7 +8,7 @@ import {
   listApprovedAssetPacks,
 } from '@/lib/agent-asset-packs';
 import { logAuditEvent } from '@/lib/audit';
-import { agentCandidate } from '@/lib/agent-output';
+import { agentAssetUseRequest, agentCandidate } from '@/lib/agent-output';
 import {
   createAssetUseRequest,
   deliverAssetUse,
@@ -60,7 +60,12 @@ function createServer(principal: AgentPrincipal) {
           mode: z.enum(['strict', 'semantic']).optional().describe('Use semantic for visual and metadata search; strict is the exact metadata search fallback.'),
           limit: z.number().int().min(1).max(100).optional().describe('Maximum number of assets to return.'),
         }),
-        annotations: { readOnlyHint: true },
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       async ({ query, mode, limit }) => {
         try {
@@ -112,11 +117,17 @@ function createServer(principal: AgentPrincipal) {
           region: z.string().min(1).max(80).describe('Audience or usage territory, such as US or global.'),
           purpose: z.string().min(1).max(1_000).describe('What the image will communicate or support.'),
         }),
-        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
       },
       async (input) => {
         try {
-          return toolResult({ request: await createAssetUseRequest(principal.orgId, principal.actorId, input) });
+          const request = await createAssetUseRequest(principal.orgId, principal.actorId, input);
+          return toolResult({ request: agentAssetUseRequest(request) });
         } catch (error) {
           return toolError(error);
         }
@@ -131,11 +142,17 @@ function createServer(principal: AgentPrincipal) {
         title: 'List PixelSky asset-use requests',
         description: 'Check whether image-use requests are pending, approved, rejected, or revoked.',
         inputSchema: z.object({ status: z.enum(['pending', 'approved', 'rejected', 'revoked']).optional() }),
-        annotations: { readOnlyHint: true },
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
       },
       async ({ status }) => {
         try {
-          return toolResult({ requests: await listAssetUseRequests(principal.orgId, status) });
+          const requests = await listAssetUseRequests(principal.orgId, status);
+          return toolResult({ requests: requests.map(agentAssetUseRequest) });
         } catch (error) {
           return toolError(error);
         }
@@ -147,11 +164,17 @@ function createServer(principal: AgentPrincipal) {
         title: 'Get a PixelSky asset-use request',
         description: 'Check the current approval state and intended use for one request.',
         inputSchema: z.object({ id: z.string().uuid() }),
-        annotations: { readOnlyHint: true },
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
       },
       async ({ id }) => {
         try {
-          return toolResult({ request: await getAssetUseRequest(principal.orgId, id) });
+          const request = await getAssetUseRequest(principal.orgId, id);
+          return toolResult({ request: agentAssetUseRequest(request) });
         } catch (error) {
           return toolError(error);
         }
@@ -163,7 +186,12 @@ function createServer(principal: AgentPrincipal) {
         title: 'Get an approved PixelSky image',
         description: 'Return image and download links only when this exact use was approved and the Cloudinary asset has not changed.',
         inputSchema: z.object({ id: z.string().uuid() }),
-        annotations: { readOnlyHint: true },
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       async ({ id }) => {
         try {
@@ -184,7 +212,12 @@ function createServer(principal: AgentPrincipal) {
         inputSchema: z.object({
           limit: z.number().int().min(1).max(100).optional(),
         }),
-        annotations: { readOnlyHint: true },
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
       },
       async ({ limit }) => {
         try {
@@ -203,7 +236,12 @@ function createServer(principal: AgentPrincipal) {
         inputSchema: z.object({
           id: z.string().uuid().describe('PixelSky asset pack ID.'),
         }),
-        annotations: { readOnlyHint: true },
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
       },
       async ({ id }) => {
         try {
@@ -239,7 +277,12 @@ function createServer(principal: AgentPrincipal) {
             ])).max(6).optional(),
           })).min(1).max(20),
         }),
-        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
       },
       async (payload) => {
         try {
@@ -265,7 +308,12 @@ function createServer(principal: AgentPrincipal) {
         inputSchema: z.object({
           id: z.string().uuid().describe('Draft PixelSky asset pack ID.'),
         }),
-        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
       },
       async ({ id }) => {
         try {
