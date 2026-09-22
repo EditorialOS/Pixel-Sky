@@ -68,7 +68,9 @@ export async function claimFigmaPairing(id: string, secret: string) {
     orgId: data.approved_org_id,
     userId: data.approved_by,
     name: 'PixelSky Figma plugin',
-    scopes: ['assets:read', 'asset_uses:read', 'asset_uses:request'],
+    // Figma can retrieve workspace-scoped assets directly. It does not use
+    // the separate asset-use approval workflow.
+    scopes: ['assets:read'],
     expiresAt,
   });
   return { status: 'connected' as const, token, expires_at: expiresAt };

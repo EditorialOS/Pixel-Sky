@@ -2,7 +2,7 @@ const API = 'https://light-dam-v1.vercel.app';
 const TOKEN_KEY = 'pixelsky_token';
 const EXPIRY_KEY = 'pixelsky_token_expiry';
 
-figma.showUI(__html__, { width: 420, height: 660, themeColors: false });
+figma.showUI(__html__, { width: 480, height: 720, themeColors: false });
 
 function send(type, data) {
   figma.ui.postMessage({ type, ...data });
@@ -46,20 +46,18 @@ async function connect() {
       await figma.clientStorage.setAsync(TOKEN_KEY, result.token);
       await figma.clientStorage.setAsync(EXPIRY_KEY, result.expires_at);
       send('CONNECTED', { message: 'Connected to PixelSky.' });
-      await refresh();
       return;
     }
   }
   throw new Error('Pairing expired. Try Connect again.');
 }
 
-async function refresh() {
-  const body = await api('/api/figma/use');
-  send('REQUESTS', { requests: body.requests || [] });
+async function deliveryFor(publicId) {
+  return api(`/api/figma/assets/delivery?public_id=${encodeURIComponent(publicId)}`);
 }
 
-async function place(id) {
-  const delivery = await api(`/api/figma/use/${encodeURIComponent(id)}/delivery`);
+async function place(publicId) {
+  const delivery = await deliveryFor(publicId);
   const image = await figma.createImageAsync(delivery.figma_image_url);
   const selection = figma.currentPage.selection;
   let node;
@@ -75,9 +73,14 @@ async function place(id) {
     figma.viewport.scrollAndZoomIntoView([node]);
   }
   node.fills = [{ type: 'IMAGE', imageHash: image.hash, scaleMode: 'FILL' }];
-  node.setPluginData('pixelsky_use_request_id', id);
   node.setPluginData('pixelsky_public_id', delivery.public_id);
-  send('PLACED', { message: `Placed approved image for ${delivery.approved_use.campaign}.` });
+  send('PLACED', { message: `Placed ${delivery.filename}.` });
+}
+
+async function download(publicId) {
+  const delivery = await deliveryFor(publicId);
+  figma.openExternal(delivery.download_url);
+  send('DOWNLOADED', { message: `Opening download for ${delivery.filename}.` });
 }
 
 figma.ui.onmessage = async (message) => {
@@ -98,21 +101,11 @@ figma.ui.onmessage = async (message) => {
         send('RESULTS', { assets: body.assets || [], outsideScopeMatches: body.outside_scope_matches || 0 });
         break;
       }
-      case 'REQUEST': {
-        const body = await api('/api/figma/use', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(message.request),
-        });
-        send('REQUESTED', { message: `Requested approval for ${body.request.public_id}.` });
-        await refresh();
-        break;
-      }
-      case 'REFRESH':
-        await refresh();
-        break;
       case 'PLACE':
-        await place(message.id);
+        await place(message.publicId);
+        break;
+      case 'DOWNLOAD':
+        await download(message.publicId);
         break;
     }
   } catch (error) {
@@ -122,5 +115,4 @@ figma.ui.onmessage = async (message) => {
 
 token().then(async (current) => {
   send('STATE', { connected: Boolean(current) });
-  if (current) await refresh();
 }).catch((error) => send('ERROR', { message: error.message }));
