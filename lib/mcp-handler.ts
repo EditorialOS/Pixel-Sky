@@ -79,6 +79,7 @@ function createServer(principal: AgentPrincipal) {
         _meta: {
           ui: {
             prefersBorder: true,
+            domain: 'https://light-dam-v1.vercel.app',
             csp: { resourceDomains: ['https://res.cloudinary.com'] },
           },
         },
