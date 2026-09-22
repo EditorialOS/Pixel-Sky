@@ -4,90 +4,74 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    :root { --ink:#282722; --muted:#77736b; --line:#e6e1d8; --paper:#fcfaf6; --accent:#376575; }
+    :root { --ink:#111111; --muted:#6b6b6b; --line:#e7e7e7; --soft:#f6f6f6; }
     * { box-sizing:border-box; }
-    body { margin:0; background:var(--paper); color:var(--ink); font:13px/1.45 ui-sans-serif, sans-serif; }
-    header { padding:21px 22px 17px; border-bottom:1px solid var(--line); background:#fffdfa; }
-    .eyebrow { color:var(--accent); font-size:10px; font-weight:700; letter-spacing:.25em; text-transform:uppercase; }
-    h1 { margin:5px 0 3px; font:600 26px/1.1 Georgia,serif; }
-    p { margin:0; }
-    .muted { color:var(--muted); }
-    main { padding:18px 22px 26px; }
+    body { margin:0; background:#fff; color:var(--ink); font:13px/1.45 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    header { padding:24px; border-bottom:1px solid var(--line); }
+    .eyebrow { font-size:11px; font-weight:650; letter-spacing:.08em; text-transform:uppercase; }
+    h1 { margin:5px 0 6px; font-size:25px; line-height:1.1; letter-spacing:-.045em; }
+    h2 { margin:0; font-size:14px; letter-spacing:-.01em; }
+    p { margin:0; } .muted { color:var(--muted); } .hidden { display:none !important; }
+    main { padding:18px 24px 28px; }
     button,input { font:inherit; }
-    button { cursor:pointer; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--ink); padding:9px 12px; }
-    button:hover { border-color:var(--accent); }
-    button.primary { border-color:var(--accent); background:var(--accent); color:#fff; font-weight:650; }
-    button.small { padding:6px 9px; font-size:11px; }
-    input { width:100%; border:1px solid var(--line); border-radius:10px; background:#fff; padding:10px 11px; color:var(--ink); }
-    label { display:block; margin:10px 0; color:var(--muted); font-size:11px; text-transform:capitalize; }
-    label input { display:block; margin-top:4px; color:var(--ink); font-size:13px; }
-    .row { display:flex; gap:8px; align-items:center; }
-    .grow { flex:1; }
-    .section { margin-top:24px; }
-    h2 { margin:0 0 10px; font-size:15px; }
-    .card { padding:12px; border:1px solid var(--line); border-radius:14px; background:#fff; margin:9px 0; }
-    .card img { width:56px; height:56px; object-fit:cover; border-radius:8px; }
-    .break { overflow-wrap:anywhere; }
-    .badge { display:inline-block; padding:3px 7px; border:1px solid var(--line); border-radius:99px; font-size:10px; text-transform:uppercase; letter-spacing:.08em; }
-    .message { margin:0 0 15px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; }
-    .hidden { display:none; }
-    .divider { border:0; border-top:1px solid var(--line); margin:18px 0; }
+    button { cursor:pointer; border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--ink); padding:8px 11px; font-weight:540; }
+    button:hover { border-color:#999; } button.primary { background:#111; border-color:#111; color:#fff; }
+    button.small { padding:7px 9px; font-size:12px; }
+    input { width:100%; min-width:0; border:1px solid var(--line); border-radius:7px; background:#fff; padding:10px 11px; color:var(--ink); outline:none; }
+    input:focus { border-color:#111; box-shadow:0 0 0 1px #111; }
+    .row { display:flex; gap:8px; align-items:center; } .grow { flex:1; }
+    .message { margin:0 0 16px; padding:9px 11px; border:1px solid var(--line); border-radius:7px; color:var(--muted); }
+    .intro { margin-bottom:18px; } .search { margin-bottom:22px; }
+    .result-label { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .asset { min-width:0; border:1px solid var(--line); border-radius:9px; overflow:hidden; background:#fff; }
+    .asset img { display:block; width:100%; height:180px; object-fit:cover; background:var(--soft); }
+    .asset-body { padding:10px; } .asset-name { display:block; overflow:hidden; font-size:12px; font-weight:620; text-overflow:ellipsis; white-space:nowrap; }
+    .tags { display:flex; gap:5px; min-height:25px; margin:7px 0 8px; overflow:hidden; }
+    .tag { max-width:100%; overflow:hidden; padding:3px 6px; border-radius:999px; background:var(--soft); color:#555; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+    .asset-actions { display:flex; gap:6px; } .asset-actions button { flex:1; }
+    .empty { padding:24px 0; color:var(--muted); } .footer { margin-top:24px; }
   </style>
 </head>
 <body>
-  <header><span class="eyebrow">PixelSky / Figma</span><h1>Find. Approve. Place.</h1><p class="muted">Your Cloudinary library, with a use decision attached.</p></header>
+  <header><div class="eyebrow">PixelSky / Figma</div><h1>Search assets. Place instantly.</h1><p class="muted">Workspace-scoped Cloudinary assets, ready for your canvas.</p></header>
   <main>
     <p id="message" class="message hidden" role="status"></p>
-    <div id="connect"><p class="muted">Connect your PixelSky workspace to start searching.</p><button class="primary section" id="connectButton">Connect PixelSky</button></div>
+    <div id="connect"><p class="muted intro">Connect once to search the PixelSky library available to your workspace.</p><button class="primary" id="connectButton">Connect PixelSky</button></div>
     <div id="workspace" class="hidden">
-      <div class="row"><input id="query" class="grow" placeholder="Try: warm coastal travel at sunset" /><button class="primary" id="searchButton">Search</button></div>
-      <div id="results" class="section"></div>
-      <div id="requestForm" class="section hidden"><hr class="divider" /><h2 id="selectedTitle">Request image use</h2><form id="useForm"><label>Channel<input name="channel" required placeholder="Website, email, social, Figma design" /></label><label>Campaign<input name="campaign" required /></label><label>Placement<input name="placement" required placeholder="Hero, card, header, story" /></label><label>Region<input name="region" required placeholder="US or global" /></label><label>Purpose<input name="purpose" required placeholder="What is this image for?" /></label><button class="primary" type="submit">Request approval</button></form></div>
-      <div class="section"><hr class="divider" /><div class="row"><h2 class="grow">Use requests</h2><button class="small" id="refreshButton">Refresh</button></div><p class="muted">Approved images can be placed into a selected shape or as a new rectangle.</p><div id="requests"></div></div>
-      <div class="section"><button class="small" id="disconnectButton">Disconnect</button></div>
+      <div class="row search"><input id="query" class="grow" placeholder="Search: coastal hotel at sunset" /><button class="primary" id="searchButton">Search</button></div>
+      <div class="result-label"><h2 id="resultTitle">Search your library</h2><span id="scopeNote" class="muted"></span></div>
+      <div id="results" class="grid"></div>
+      <div class="footer"><button class="small" id="disconnectButton">Disconnect workspace</button></div>
     </div>
   </main>
   <script>
     const $ = (id) => document.getElementById(id);
-    let selected = null;
     const post = (type, data = {}) => parent.postMessage({ pluginMessage: { type, ...data } }, '*');
     function message(value) { $('message').textContent = value; $('message').classList.toggle('hidden', !value); }
     function setConnected(value) { $('connect').classList.toggle('hidden', value); $('workspace').classList.toggle('hidden', !value); }
-    $('connectButton').onclick = () => { message('Opening PixelSky sign-in…'); post('CONNECT'); };
+    function search() { post('SEARCH', { query: $('query').value }); }
+    $('connectButton').onclick = () => { message('Opening PixelSky sign-in...'); post('CONNECT'); };
     $('disconnectButton').onclick = () => { post('DISCONNECT'); message('Disconnected.'); };
-    $('searchButton').onclick = () => post('SEARCH', { query: $('query').value });
-    $('query').onkeydown = (event) => { if (event.key === 'Enter') { event.preventDefault(); $('searchButton').click(); } };
-    $('refreshButton').onclick = () => post('REFRESH');
-    $('useForm').onsubmit = (event) => { event.preventDefault(); if (!selected) return; const form = new FormData(event.target); post('REQUEST', { request: { public_id: selected.public_id, ...Object.fromEntries(form) } }); };
+    $('searchButton').onclick = search;
+    $('query').onkeydown = (event) => { if (event.key === 'Enter') { event.preventDefault(); search(); } };
+    function tagsFor(asset) { return [...(asset.visual_tags || []), ...(asset.tags || [])].filter((tag, index, all) => tag && all.indexOf(tag) === index).slice(0, 2); }
     function renderResults(assets, outsideScopeMatches) {
       const root = $('results'); root.replaceChildren();
-      const title = document.createElement('h2'); title.textContent = `${assets.length} candidate${assets.length === 1 ? '' : 's'}`; root.append(title);
-      if (!assets.length && outsideScopeMatches) { const note = document.createElement('p'); note.className = 'muted'; note.textContent = `${outsideScopeMatches} matching images are outside this workspace folder.`; root.append(note); }
+      $('resultTitle').textContent = assets.length ? `${assets.length} matching assets` : 'No matching assets';
+      $('scopeNote').textContent = outsideScopeMatches ? `${outsideScopeMatches} outside your workspace` : '';
+      if (!assets.length) { const note = document.createElement('p'); note.className = 'empty'; note.textContent = 'Try a shorter search, a campaign name, or a Cloudinary tag.'; root.append(note); return; }
       for (const asset of assets) {
-        const card = document.createElement('div'); card.className = 'card row';
-        const img = document.createElement('img'); img.src = asset.preview_url; img.alt = asset.filename;
-        const info = document.createElement('div'); info.className = 'grow';
-        const name = document.createElement('strong'); name.className = 'break'; name.textContent = asset.filename;
-        const description = document.createElement('p'); description.className = 'muted'; description.textContent = asset.visual_description || (asset.tags || []).slice(0, 4).join(', ');
-        info.append(name, description);
-        const button = document.createElement('button'); button.className = 'small'; button.textContent = 'Request';
-        button.onclick = () => { selected = asset; $('selectedTitle').textContent = `Request use: ${asset.filename}`; $('requestForm').classList.remove('hidden'); $('requestForm').scrollIntoView({ behavior: 'smooth' }); };
-        card.append(img, info, button); root.append(card);
-      }
-    }
-    function renderRequests(requests) {
-      const root = $('requests'); root.replaceChildren();
-      if (!requests.length) { const note = document.createElement('p'); note.className = 'muted section'; note.textContent = 'No requests yet.'; root.append(note); }
-      for (const request of requests) {
-        const card = document.createElement('div'); card.className = 'card';
-        const top = document.createElement('div'); top.className = 'row';
-        const title = document.createElement('strong'); title.className = 'grow break'; title.textContent = request.public_id;
-        const status = document.createElement('span'); status.className = 'badge'; status.textContent = request.status;
-        top.append(title, status);
-        const details = document.createElement('p'); details.className = 'muted'; details.textContent = `${request.channel} · ${request.campaign} · ${request.region}`;
-        card.append(top, details);
-        if (request.status === 'approved') { const button = document.createElement('button'); button.className = 'primary small section'; button.textContent = 'Place in Figma'; button.onclick = () => post('PLACE', { id: request.id }); card.append(button); }
-        root.append(card);
+        const card = document.createElement('article'); card.className = 'asset';
+        const image = document.createElement('img'); image.src = asset.preview_url; image.alt = asset.filename; image.loading = 'lazy';
+        const body = document.createElement('div'); body.className = 'asset-body';
+        const name = document.createElement('span'); name.className = 'asset-name'; name.textContent = asset.filename;
+        const tags = document.createElement('div'); tags.className = 'tags';
+        for (const tag of tagsFor(asset)) { const chip = document.createElement('span'); chip.className = 'tag'; chip.textContent = tag; tags.append(chip); }
+        const actions = document.createElement('div'); actions.className = 'asset-actions';
+        const place = document.createElement('button'); place.className = 'primary small'; place.textContent = 'Place'; place.onclick = () => post('PLACE', { publicId: asset.public_id });
+        const download = document.createElement('button'); download.className = 'small'; download.textContent = 'Download'; download.onclick = () => post('DOWNLOAD', { publicId: asset.public_id });
+        actions.append(place, download); body.append(name, tags, actions); card.append(image, body); root.append(card);
       }
     }
     onmessage = (event) => {
@@ -96,9 +80,8 @@
         case 'STATE': setConnected(data.connected); break;
         case 'CONNECTED': setConnected(true); message(data.message); break;
         case 'DISCONNECTED': setConnected(false); break;
-        case 'PAIRING': case 'ERROR': case 'REQUESTED': case 'PLACED': message(data.message); break;
+        case 'PAIRING': case 'ERROR': case 'PLACED': case 'DOWNLOADED': message(data.message); break;
         case 'RESULTS': renderResults(data.assets, data.outsideScopeMatches); break;
-        case 'REQUESTS': renderRequests(data.requests); break;
       }
     };
   </script>

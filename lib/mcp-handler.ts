@@ -17,8 +17,7 @@ import {
 } from '@/lib/asset-use-requests';
 import { searchDamAssets } from '@/lib/dam-search';
 import { assetUseWorkflowEnabled } from '@/lib/workflow-flags';
-
-const MAX_MCP_PREVIEW_IMAGES = 5;
+import { ASSET_GALLERY_RESOURCE_URI, assetGalleryHtml } from '@/lib/mcp-asset-gallery';
 
 function toolResult(value: unknown) {
   return {
@@ -26,18 +25,24 @@ function toolResult(value: unknown) {
   };
 }
 
-function toolResultWithPreviews(value: unknown, previewUrls: string[]) {
-  const previewMarkdown = previewUrls
-    .slice(0, MAX_MCP_PREVIEW_IMAGES)
-    .map((url, index) => `![PixelSky asset preview ${index + 1}](${url})`)
-    .join('\n\n');
+function toolResultWithGallery(value: Record<string, unknown>) {
   return {
-    content: [{
-      type: 'text' as const,
-      text: `${previewMarkdown}\n\n${JSON.stringify(value, null, 2)}`,
-    }],
+    content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
+    structuredContent: value,
   };
 }
+
+const searchAssetsOutputSchema = z.object({
+  query: z.string(),
+  total: z.number(),
+  assets: z.array(z.object({
+    public_id: z.string(),
+    filename: z.string(),
+    preview_url: z.string(),
+    tags: z.array(z.string()).optional(),
+    visual_tags: z.array(z.string()).optional(),
+  }).passthrough()),
+}).passthrough();
 
 function toolError(error: unknown) {
   const message = error instanceof Error ? error.message : 'The request could not be completed.';
@@ -62,6 +67,25 @@ function createServer(principal: AgentPrincipal) {
     version: '1.0.0',
   });
 
+  server.registerResource(
+    'pixelsky-asset-gallery',
+    ASSET_GALLERY_RESOURCE_URI,
+    { mimeType: 'text/html;profile=mcp-app' },
+    async (uri) => ({
+      contents: [{
+        uri: uri.href,
+        mimeType: 'text/html;profile=mcp-app',
+        text: assetGalleryHtml,
+        _meta: {
+          ui: {
+            prefersBorder: true,
+            csp: { resourceDomains: ['https://res.cloudinary.com'] },
+          },
+        },
+      }],
+    }),
+  );
+
   if (hasAgentScope(principal, 'assets:read')) {
     server.registerTool(
       'search_assets',
@@ -75,6 +99,13 @@ function createServer(principal: AgentPrincipal) {
           mode: z.enum(['strict', 'semantic']).optional().describe('Use semantic for visual and metadata search; strict is the exact metadata search fallback.'),
           limit: z.number().int().min(1).max(100).optional().describe('Maximum number of assets to return.'),
         }),
+        outputSchema: searchAssetsOutputSchema,
+        _meta: {
+          ui: { resourceUri: ASSET_GALLERY_RESOURCE_URI },
+          'openai/outputTemplate': ASSET_GALLERY_RESOURCE_URI,
+          'openai/toolInvocation/invoking': 'Searching PixelSky...',
+          'openai/toolInvocation/invoked': 'PixelSky results ready',
+        },
         annotations: {
           readOnlyHint: true,
           destructiveHint: false,
@@ -111,10 +142,7 @@ function createServer(principal: AgentPrincipal) {
           const agentResult = assetUseWorkflowEnabled()
             ? { ...result, assets: result.assets.map(agentCandidate) }
             : result;
-          return toolResultWithPreviews(
-            agentResult,
-            result.assets.map((asset) => asset.preview_url),
-          );
+          return toolResultWithGallery(agentResult);
         } catch (error) {
           return toolError(error);
         }
