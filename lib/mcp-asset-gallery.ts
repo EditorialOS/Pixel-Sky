@@ -26,6 +26,8 @@ export const assetGalleryHtml = String.raw`<!doctype html>
   <main id="app" class="shell"><p class="empty">Preparing PixelSky previews...</p></main>
   <script>
     const app = document.getElementById('app');
+    const pendingRequests = new Map();
+    let nextRequestId = 1;
     const tagList = (asset) => [...(asset.visual_tags || []), ...(asset.tags || [])]
       .filter((tag, index, tags) => tag && tags.indexOf(tag) === index).slice(0, 2);
     const linkFor = (asset) => asset.source_url || asset.preview_url;
@@ -51,11 +53,31 @@ export const assetGalleryHtml = String.raw`<!doctype html>
       }
       app.append(heading, grid);
     }
+    function request(method, params) {
+      const id = nextRequestId++;
+      window.parent.postMessage({ jsonrpc: '2.0', id, method, params }, '*');
+      return new Promise((resolve, reject) => pendingRequests.set(id, { resolve, reject }));
+    }
     window.addEventListener('message', (event) => {
-      const message = event.data || {};
-      if (message.method === 'ui/notifications/tool-result') render(message.params && message.params.structuredContent);
-      else if (message.structuredContent) render(message.structuredContent);
-    });
+      if (event.source !== window.parent) return;
+      const message = event.data;
+      if (!message || message.jsonrpc !== '2.0') return;
+      if (message.id !== undefined && pendingRequests.has(message.id)) {
+        const pending = pendingRequests.get(message.id); pendingRequests.delete(message.id);
+        if (message.error) pending.reject(message.error); else pending.resolve(message.result);
+        return;
+      }
+      if (message.method === 'ui/notifications/tool-result') render(message.params?.structuredContent);
+    }, { passive: true });
+    // ChatGPT exposes this compatibility value in addition to the MCP Apps bridge.
+    if (window.openai?.toolOutput) render(window.openai.toolOutput);
+    request('ui/initialize', {
+      appInfo: { name: 'PixelSky gallery', version: '1.0.0' },
+      appCapabilities: {},
+      protocolVersion: '2026-01-26',
+    }).then(() => window.parent.postMessage({
+      jsonrpc: '2.0', method: 'ui/notifications/initialized', params: {},
+    }, '*')).catch(() => {});
   </script>
 </body>
 </html>`;
