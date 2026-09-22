@@ -32,17 +32,25 @@ function toolResultWithGallery(value: Record<string, unknown>) {
   };
 }
 
+const galleryAssetSchema = z.object({
+  public_id: z.string(),
+  filename: z.string(),
+  preview_url: z.string(),
+  source_url: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  visual_tags: z.array(z.string()).optional(),
+});
+
 const searchAssetsOutputSchema = z.object({
   query: z.string(),
   total: z.number(),
-  assets: z.array(z.object({
-    public_id: z.string(),
-    filename: z.string(),
-    preview_url: z.string(),
-    tags: z.array(z.string()).optional(),
-    visual_tags: z.array(z.string()).optional(),
-  }).passthrough()),
+  assets: z.array(galleryAssetSchema.passthrough()),
 }).passthrough();
+
+const renderGalleryOutputSchema = z.object({
+  query: z.string().optional(),
+  assets: z.array(galleryAssetSchema).min(1).max(5),
+});
 
 function toolError(error: unknown) {
   const message = error instanceof Error ? error.message : 'The request could not be completed.';
@@ -102,8 +110,6 @@ function createServer(principal: AgentPrincipal) {
         }),
         outputSchema: searchAssetsOutputSchema,
         _meta: {
-          ui: { resourceUri: ASSET_GALLERY_RESOURCE_URI },
-          'openai/outputTemplate': ASSET_GALLERY_RESOURCE_URI,
           'openai/toolInvocation/invoking': 'Searching PixelSky...',
           'openai/toolInvocation/invoked': 'PixelSky results ready',
         },
@@ -148,6 +154,31 @@ function createServer(principal: AgentPrincipal) {
           return toolError(error);
         }
       },
+    );
+  }
+
+  if (hasAgentScope(principal, 'assets:read')) {
+    server.registerTool(
+      'render_asset_gallery',
+      {
+        title: 'Show PixelSky image previews',
+        description: 'Render up to five PixelSky results as an in-chat image gallery. Call search_assets first, then pass the final assets the user should inspect.',
+        inputSchema: renderGalleryOutputSchema,
+        outputSchema: renderGalleryOutputSchema,
+        _meta: {
+          ui: { resourceUri: ASSET_GALLERY_RESOURCE_URI },
+          'openai/outputTemplate': ASSET_GALLERY_RESOURCE_URI,
+          'openai/toolInvocation/invoking': 'Preparing image previews...',
+          'openai/toolInvocation/invoked': 'PixelSky previews ready',
+        },
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
+      },
+      async ({ query, assets }) => toolResultWithGallery({ query, assets }),
     );
   }
 
